@@ -1,24 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { AppShell } from "@/components/AppShell";
+import { DesignerWorkspace } from "@/components/designer/DesignerWorkspace";
+import { SetupScreen } from "@/components/designer/SetupScreen";
+import type { ProjectContext } from "@/lib/ruleEngine";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+const TITLE = "Architecture Designer — ArchGuard AI";
+const DESCRIPTION =
+  "Design AWS, Azure or GCP architectures on a drag-and-drop canvas and review them with a deterministic security, scalability and reliability rule engine.";
+
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: TITLE },
+      { name: "description", content: DESCRIPTION },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: DESCRIPTION },
+    ],
+  }),
+  component: DesignerPage,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function DesignerPage() {
+  const [ctx, setCtx] = useState<ProjectContext | null>(null);
+  const [editing, setEditing] = useState(false);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <AppShell>
+      {!ctx || editing ? (
+        <SetupScreen
+          {...(ctx ? { initial: ctx } : {})}
+          onStart={(next) => {
+            setCtx(next);
+            setEditing(false);
+          }}
+          {...(ctx ? { onCancel: () => setEditing(false) } : {})}
+        />
+      ) : (
+        <DesignerWorkspace ctx={ctx} onEditContext={() => setEditing(true)} />
+      )}
+    </AppShell>
   );
 }
