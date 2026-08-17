@@ -51,21 +51,25 @@ function KnowledgePage() {
 
   return (
     <AppShell>
-      <PageHeader
-        title="Knowledge Hub"
-        subtitle="Design → Review → Learn → Improve"
-        actions={
-          <div className="relative w-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <PageHeader title="Knowledge Hub" subtitle="Design → Review → Learn → Improve" />
+
+      <div className="border-b border-border bg-surface/60 px-6 py-6">
+        <div className="mx-auto w-full max-w-xl text-center">
+          <h2 className="text-base font-semibold tracking-tight">
+            Learn system design, scalability, security and cloud architecture
+          </h2>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search topics and articles..."
-              className="h-9 pl-8 text-xs"
+              aria-label="Search topics and articles"
+              className="h-11 rounded-full pl-10 text-sm shadow-sm"
             />
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {open ? (
         <div className="flex-1 overflow-y-auto p-6">
