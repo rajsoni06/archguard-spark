@@ -80,6 +80,58 @@
 
 :root {
   --radius: 0.6rem;
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.22 0.02 258);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.955 0.005 250);
+  --grid: oklch(0.885 0.008 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 258);
+  --primary: oklch(0.55 0.13 205);
+  --primary-foreground: oklch(0.99 0.003 250);
+  --secondary: oklch(0.95 0.006 250);
+  --secondary-foreground: oklch(0.26 0.02 258);
+  --muted: oklch(0.955 0.005 250);
+  --muted-foreground: oklch(0.5 0.017 258);
+  --accent: oklch(0.94 0.012 220);
+  --accent-foreground: oklch(0.24 0.02 258);
+  --destructive: oklch(0.56 0.2 25);
+  --destructive-foreground: oklch(0.99 0.003 250);
+  --success: oklch(0.56 0.13 158);
+  --success-foreground: oklch(0.99 0.003 250);
+  --warning: oklch(0.66 0.15 68);
+  --warning-foreground: oklch(0.18 0.02 60);
+  --info: oklch(0.55 0.15 265);
+  --border: oklch(0.9 0.008 250);
+  --input: oklch(0.9 0.008 250);
+  --ring: oklch(0.55 0.13 205);
+  --aws: oklch(0.63 0.15 60);
+  --azure: oklch(0.55 0.17 250);
+  --gcp: oklch(0.56 0.14 148);
+  --chart-1: oklch(0.55 0.13 205);
+  --chart-2: oklch(0.56 0.13 158);
+  --chart-3: oklch(0.55 0.15 265);
+  --chart-4: oklch(0.66 0.15 68);
+  --chart-5: oklch(0.58 0.17 20);
+  --sidebar: oklch(0.975 0.004 250);
+  --sidebar-foreground: oklch(0.27 0.02 258);
+  --sidebar-primary: oklch(0.55 0.13 205);
+  --sidebar-primary-foreground: oklch(0.99 0.003 250);
+  --sidebar-accent: oklch(0.93 0.012 220);
+  --sidebar-accent-foreground: oklch(0.22 0.02 258);
+  --sidebar-border: oklch(0.9 0.008 250);
+  --sidebar-ring: oklch(0.55 0.13 205);
+  --shadow-panel: 0 18px 40px -28px oklch(0.3 0.03 258 / 0.45);
+  --gradient-hero: radial-gradient(
+    120% 120% at 50% 0%,
+    color-mix(in oklab, var(--primary) 12%, transparent),
+    transparent 60%
+  );
+}
+
+.dark {
   --background: oklch(0.168 0.014 258);
   --foreground: oklch(0.955 0.006 250);
   --surface: oklch(0.204 0.015 258);
@@ -124,46 +176,6 @@
   --sidebar-border: oklch(0.26 0.016 258);
   --sidebar-ring: oklch(0.74 0.135 196);
   --shadow-panel: 0 18px 40px -24px oklch(0 0 0 / 0.8);
-  --gradient-hero: radial-gradient(
-    120% 120% at 50% 0%,
-    color-mix(in oklab, var(--primary) 16%, transparent),
-    transparent 60%
-  );
-}
-
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
 @layer base {
@@ -223,4 +235,28 @@
   50% {
     opacity: 1;
   }
+}
+
+/* React Flow controls — readable in both themes */
+.react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+}
+.react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  width: 26px;
+  height: 26px;
+}
+.react-flow__controls-button:hover {
+  background: var(--accent);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+  color: var(--foreground);
+  max-width: 13px;
+  max-height: 13px;
 }
