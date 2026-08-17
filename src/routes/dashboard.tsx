@@ -31,7 +31,7 @@ const STATS = [
 const RECENT = [
   { name: "E-Commerce Platform Architecture", meta: "AWS • Microservices • 10M+ Users", score: 87, level: "Enterprise Ready" },
   { name: "Retail Banking Core", meta: "Azure • Layered • 1M+ Users", score: 74, level: "Startup Ready" },
-  { name: "Telemetry Ingestion Pipeline", meta: "GCP • Event-Driven • 10M+ Users", score: 91, level: "FAANG Scale" },
+  { name: "Telemetry Ingestion Pipeline", meta: "GCP • Event-Driven • 10M+ Users", score: 91, level: "FAANG-Scale" },
 ];
 
 function DashboardPage() {
