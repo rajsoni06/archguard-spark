@@ -3,189 +3,358 @@ import {
   AlertTriangle,
   BookOpen,
   Bot,
+  ChevronDown,
   ChevronRight,
   CircleCheck,
   PanelRightClose,
+  PiggyBank,
   Sparkles,
 } from "lucide-react";
+import { useState } from "react";
 import { ScoreRing } from "./ScoreRing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatUsd, type CostEstimate } from "@/lib/costEngine";
 import { explainAnalysis, type AnalysisResult, type ProjectContext } from "@/lib/ruleEngine";
+import { cn } from "@/lib/utils";
 
 interface Props {
   result: AnalysisResult | null;
   ctx: ProjectContext;
+  cost: CostEstimate;
   collapsed: boolean;
   onToggle: () => void;
   onRun: () => void;
 }
 
-export function ReviewPanel({ result, ctx, collapsed, onToggle, onRun }: Props) {
-  if (collapsed) {
-    return (
+export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: Props) {
+  return (
+    <aside
+      className={cn(
+        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface transition-[width] duration-300 ease-out",
+        collapsed ? "w-9" : "w-[330px]",
+      )}
+    >
       <button
         onClick={onToggle}
         aria-label="Expand review panel"
-        className="flex w-9 shrink-0 flex-col items-center gap-3 border-l border-border bg-surface py-3 text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          "absolute inset-0 z-10 flex flex-col items-center gap-3 bg-surface py-3 text-muted-foreground transition-opacity duration-200 hover:text-foreground",
+          collapsed ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
       >
         <ChevronRight className="size-4 rotate-180" />
         <span className="text-[11px] font-medium [writing-mode:vertical-rl]">Review</span>
       </button>
+
+      <div
+        className={cn(
+          "flex h-full w-[330px] min-w-[330px] flex-col transition-opacity duration-200",
+          collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+        )}
+      >
+        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+          <span className="text-[13px] font-semibold">Architecture Review</span>
+          <button
+            onClick={onToggle}
+            aria-label="Collapse review panel"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <PanelRightClose className="size-4" />
+          </button>
+        </div>
+
+        {!result ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Design your architecture, then run the deterministic rule engine to get category
+              scores, strengths and violations.
+            </p>
+            <Button size="sm" onClick={onRun}>
+              Review Architecture
+            </Button>
+            <CostCard cost={cost} ctx={ctx} />
+          </div>
+        ) : (
+          <Tabs defaultValue="analysis" className="flex min-h-0 flex-1 flex-col gap-0">
+            <TabsList className="m-2.5 grid grid-cols-5">
+              <TabsTrigger value="analysis" className="text-[11px]">Analysis</TabsTrigger>
+              <TabsTrigger value="score" className="text-[11px]">Score</TabsTrigger>
+              <TabsTrigger value="cost" className="text-[11px]">Cost</TabsTrigger>
+              <TabsTrigger value="suggestions" className="text-[11px]">Fixes</TabsTrigger>
+              <TabsTrigger value="ai" className="text-[11px]">AI</TabsTrigger>
+            </TabsList>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+              <TabsContent value="analysis" className="mt-0 space-y-4">
+                <Group title={`Detected strengths (${result.strengths.length})`}>
+                  {result.strengths.map((r) => (
+                    <li key={r.rule.id} className="flex gap-2 text-xs text-muted-foreground">
+                      <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-success" />
+                      <span>{r.rule.strength}</span>
+                    </li>
+                  ))}
+                  {result.strengths.length === 0 ? <Empty text="No rules satisfied yet." /> : null}
+                </Group>
+
+                <Group title={`Issues (${result.issues.length})`}>
+                  {result.issues.map((r) => (
+                    <li key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
+                      <div className="flex gap-2">
+                        <AlertTriangle
+                          className={`mt-0.5 size-3.5 shrink-0 ${
+                            r.rule.severity === "critical" ? "text-destructive" : "text-warning"
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium">{r.rule.issue}</div>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
+                              {r.rule.category}
+                            </Badge>
+                            <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
+                              {r.rule.severity}
+                            </Badge>
+                          </div>
+                          {r.rule.learn ? (
+                            <Link
+                              to="/knowledge"
+                              search={{ article: r.rule.learn }}
+                              className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                            >
+                              <BookOpen className="size-3" /> Learn: {r.rule.learn.replace(/-/g, " ")}
+                            </Link>
+                          ) : null}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                  {result.issues.length === 0 ? <Empty text="No violations detected." /> : null}
+                </Group>
+
+                <CostCard cost={cost} ctx={ctx} />
+              </TabsContent>
+
+              <TabsContent value="score" className="mt-0">
+                <div className="flex flex-col items-center py-3">
+                  <ScoreRing value={result.overall} />
+                  <div className="mt-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Overall Architecture Score
+                  </div>
+                  <Badge className="mt-2" variant="outline">
+                    {result.maturity}
+                  </Badge>
+                </div>
+                <div className="mt-3 space-y-2.5">
+                  {result.categories.map((c) => (
+                    <div key={c.category}>
+                      <div className="mb-1 flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground">{c.category}</span>
+                        <span className="font-medium">
+                          {c.score === null ? "N/A" : `${c.score}/100`}
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${c.score ?? 0}%`,
+                            backgroundColor:
+                              (c.score ?? 0) >= 85
+                                ? "var(--success)"
+                                : (c.score ?? 0) >= 60
+                                  ? "var(--primary)"
+                                  : "var(--warning)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {result.nodeCount === 0 ? (
+                  <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+                    Insufficient architecture information to evaluate these categories. Add
+                    components to the canvas and re-run the review.
+                  </p>
+                ) : null}
+                <div className="mt-4">
+                  <CostCard cost={cost} ctx={ctx} />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="cost" className="mt-0 space-y-3">
+                <CostCard cost={cost} ctx={ctx} defaultOpen />
+              </TabsContent>
+
+              <TabsContent value="suggestions" className="mt-0 space-y-2">
+                {result.issues.map((r, i) => (
+                  <div key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
+                    <div className="text-[11px] font-semibold text-primary">Recommendation {i + 1}</div>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {r.rule.recommendation}
+                    </p>
+                  </div>
+                ))}
+                {result.issues.length === 0 ? <Empty text="Nothing to improve for this context." /> : null}
+              </TabsContent>
+
+              <TabsContent value="ai" className="mt-0 space-y-3">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                    <Bot className="size-3.5" /> AI explanation
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {explainAnalysis(result, ctx)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-dashed border-border p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                    <Sparkles className="size-3.5" /> Rule Engine decides · AI explains
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                    Every sentence above is derived from the{" "}
+                    {result.strengths.length + result.issues.length} deterministic rules evaluated for{" "}
+                    {ctx.pattern} · {ctx.scale} · {ctx.industry}.
+                  </p>
+                </div>
+              </TabsContent>
+            </div>
+
+            <div className="border-t border-border p-2.5">
+              <Button size="sm" className="w-full" onClick={onRun}>
+                Re-run review
+              </Button>
+            </div>
+          </Tabs>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function CostCard({
+  cost,
+  ctx,
+  defaultOpen = false,
+}: {
+  cost: CostEstimate;
+  ctx: ProjectContext;
+  defaultOpen?: boolean;
+}) {
+  const [showBreakdown, setShowBreakdown] = useState(defaultOpen);
+  const [showAssumptions, setShowAssumptions] = useState(false);
+
+  if (!cost.available) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Estimated Monthly Cost
+        </div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">$0 / month</div>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          Add cloud services to calculate your estimated infrastructure cost.
+        </p>
+      </div>
     );
   }
 
   return (
-    <aside className="flex w-[330px] shrink-0 flex-col border-l border-border bg-surface">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-        <span className="text-[13px] font-semibold">Architecture Review</span>
-        <button
-          onClick={onToggle}
-          aria-label="Collapse review panel"
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <PanelRightClose className="size-4" />
-        </button>
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Estimated Monthly Cost
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-2xl font-semibold tabular-nums transition-all">
+          {formatUsd(cost.total)}
+        </span>
+        <span className="text-[11px] text-muted-foreground">/ month</span>
+      </div>
+      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-success">
+        ↓ {cost.deltaPercent}%
+        <span className="text-muted-foreground">vs an unoptimized {ctx.cloud.toUpperCase()} baseline</span>
       </div>
 
-      {!result ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Design your architecture, then run the deterministic rule engine to get category scores,
-            strengths and violations.
-          </p>
-          <Button size="sm" onClick={onRun}>
-            Review Architecture
-          </Button>
+      <button
+        onClick={() => setShowBreakdown((v) => !v)}
+        className="mt-2.5 flex w-full items-center justify-between rounded-md border border-border px-2 py-1.5 text-[11px] transition-colors hover:bg-accent"
+      >
+        View Cost Breakdown
+        <ChevronDown className={cn("size-3.5 transition-transform", showBreakdown && "rotate-180")} />
+      </button>
+
+      {showBreakdown ? (
+        <div className="mt-2 space-y-1 border-t border-border pt-2">
+          {cost.lines.map((l) => (
+            <div key={l.label} className="flex items-center justify-between text-[11px]">
+              <span className="truncate text-muted-foreground">{l.label}</span>
+              <span className="tabular-nums">{formatUsd(l.amount)}</span>
+            </div>
+          ))}
+          <div className="mt-1 flex items-center justify-between border-t border-border pt-1.5 text-[11px] font-semibold">
+            <span>Estimated Total</span>
+            <span className="tabular-nums">{formatUsd(cost.total)}</span>
+          </div>
         </div>
-      ) : (
-        <Tabs defaultValue="analysis" className="flex min-h-0 flex-1 flex-col gap-0">
-          <TabsList className="m-2.5 grid grid-cols-4">
-            <TabsTrigger value="analysis" className="text-[11px]">Analysis</TabsTrigger>
-            <TabsTrigger value="score" className="text-[11px]">Score</TabsTrigger>
-            <TabsTrigger value="suggestions" className="text-[11px]">Fixes</TabsTrigger>
-            <TabsTrigger value="ai" className="text-[11px]">Assistant</TabsTrigger>
-          </TabsList>
+      ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-            <TabsContent value="analysis" className="mt-0 space-y-4">
-              <Group title={`Detected strengths (${result.strengths.length})`}>
-                {result.strengths.map((r) => (
-                  <li key={r.rule.id} className="flex gap-2 text-xs text-muted-foreground">
-                    <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-success" />
-                    <span>{r.rule.strength}</span>
-                  </li>
-                ))}
-                {result.strengths.length === 0 ? <Empty text="No rules satisfied yet." /> : null}
-              </Group>
+      <button
+        onClick={() => setShowAssumptions((v) => !v)}
+        className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-2 py-1.5 text-[11px] transition-colors hover:bg-accent"
+      >
+        View Assumptions
+        <ChevronDown className={cn("size-3.5 transition-transform", showAssumptions && "rotate-180")} />
+      </button>
+      {showAssumptions ? (
+        <div className="mt-2 space-y-1 border-t border-border pt-2">
+          {cost.assumptions.map((a) => (
+            <div key={a.label} className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">{a.label}</span>
+              <span>{a.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
-              <Group title={`Issues (${result.issues.length})`}>
-                {result.issues.map((r) => (
-                  <li key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
-                    <div className="flex gap-2">
-                      <AlertTriangle
-                        className={`mt-0.5 size-3.5 shrink-0 ${
-                          r.rule.severity === "critical" ? "text-destructive" : "text-warning"
-                        }`}
-                      />
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium">{r.rule.issue}</div>
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
-                            {r.rule.category}
-                          </Badge>
-                          <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
-                            {r.rule.severity}
-                          </Badge>
-                        </div>
-                        {r.rule.learn ? (
-                          <Link
-                            to="/knowledge"
-                            search={{ article: r.rule.learn }}
-                            className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                          >
-                            <BookOpen className="size-3" /> Learn: {r.rule.learn.replace(/-/g, " ")}
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-                {result.issues.length === 0 ? <Empty text="No violations detected." /> : null}
-              </Group>
-            </TabsContent>
-
-            <TabsContent value="score" className="mt-0">
-              <div className="flex flex-col items-center py-3">
-                <ScoreRing value={result.overall} />
-                <Badge className="mt-3" variant="outline">
-                  {result.maturity}
-                </Badge>
-              </div>
-              <div className="mt-3 space-y-2.5">
-                {result.categories.map((c) => (
-                  <div key={c.category}>
-                    <div className="mb-1 flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">{c.category}</span>
-                      <span className="font-medium">{c.score}/100</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${c.score}%`,
-                          backgroundColor:
-                            c.score >= 85 ? "var(--success)" : c.score >= 60 ? "var(--primary)" : "var(--warning)",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="suggestions" className="mt-0 space-y-2">
-              {result.issues.map((r, i) => (
-                <div key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
-                  <div className="text-[11px] font-semibold text-primary">Recommendation {i + 1}</div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {r.rule.recommendation}
-                  </p>
-                </div>
-              ))}
-              {result.issues.length === 0 ? <Empty text="Nothing to improve for this context." /> : null}
-            </TabsContent>
-
-            <TabsContent value="ai" className="mt-0 space-y-3">
-              <div className="rounded-lg border border-border bg-card p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
-                  <Bot className="size-3.5" /> AI explanation
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  {explainAnalysis(result, ctx)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-dashed border-border p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                  <Sparkles className="size-3.5" /> Rule Engine decides · AI explains
-                </div>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  Every sentence above is derived from the {result.strengths.length + result.issues.length}{" "}
-                  deterministic rules evaluated for {ctx.pattern} · {ctx.scale} · {ctx.industry}.
-                </p>
-              </div>
-            </TabsContent>
+      {cost.recommendations.length ? (
+        <div className="mt-3 space-y-2 border-t border-border pt-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <PiggyBank className="size-3.5" /> Cost Optimization
           </div>
-
-          <div className="border-t border-border p-2.5">
-            <Button size="sm" className="w-full" onClick={onRun}>
-              Re-run review
-            </Button>
+          {cost.recommendations.map((r) => (
+            <div key={r.title} className="rounded-lg border border-border p-2">
+              <div className="flex gap-1.5 text-[11px] font-medium">
+                <AlertTriangle className="mt-0.5 size-3 shrink-0 text-warning" />
+                {r.title}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{r.detail}</p>
+              <div className="mt-1 text-[11px] text-success">
+                Potential savings ~{formatUsd(r.savings)}/month
+              </div>
+            </div>
+          ))}
+          <div className="grid grid-cols-3 gap-2 rounded-lg bg-surface-2 p-2 text-center text-[10px]">
+            <div>
+              <div className="text-muted-foreground">Current</div>
+              <div className="font-semibold tabular-nums">{formatUsd(cost.total)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Optimized</div>
+              <div className="font-semibold tabular-nums">{formatUsd(cost.optimized)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Savings</div>
+              <div className="font-semibold tabular-nums text-success">{formatUsd(cost.savings)}</div>
+            </div>
           </div>
-        </Tabs>
-      )}
-    </aside>
+        </div>
+      ) : null}
+
+      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+        Estimate only — real bills vary with region, usage, discounts, committed capacity, data
+        transfer and taxes.
+      </p>
+    </div>
   );
 }
 
