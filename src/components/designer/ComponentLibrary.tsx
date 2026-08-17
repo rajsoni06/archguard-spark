@@ -22,21 +22,31 @@ export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
       .filter((c) => c.services.length > 0);
   }, [def, query]);
 
-  if (collapsed) {
-    return (
+  return (
+    <aside
+      className={cn(
+        "relative flex shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-300 ease-out",
+        collapsed ? "w-9" : "w-[248px]",
+      )}
+    >
       <button
         onClick={onToggle}
         aria-label="Expand component library"
-        className="flex w-9 shrink-0 flex-col items-center gap-3 border-r border-border bg-surface py-3 text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          "absolute inset-0 z-10 flex flex-col items-center gap-3 bg-surface py-3 text-muted-foreground transition-opacity duration-200 hover:text-foreground",
+          collapsed ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
       >
         <ChevronRight className="size-4" />
         <span className="text-[11px] font-medium [writing-mode:vertical-rl]">Components</span>
       </button>
-    );
-  }
 
-  return (
-    <aside className="flex w-[248px] shrink-0 flex-col border-r border-border bg-surface">
+      <div
+        className={cn(
+          "flex h-full w-[248px] min-w-[248px] flex-col transition-opacity duration-200",
+          collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+        )}
+      >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
         <span className="text-[13px] font-semibold">Component Library</span>
         <button
@@ -96,6 +106,7 @@ export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
         {categories.length === 0 ? (
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">No services match.</p>
         ) : null}
+      </div>
       </div>
     </aside>
   );
