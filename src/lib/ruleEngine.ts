@@ -406,12 +406,18 @@ export interface RuleResult {
 
 export interface CategoryScore {
   category: RuleCategory;
-  score: number;
+  /** null = not enough architecture to evaluate this category (shown as N/A). */
+  score: number | null;
   passed: RuleResult[];
   failed: RuleResult[];
 }
 
-export type Maturity = "Student Project" | "Startup Ready" | "Enterprise Ready" | "FAANG Scale";
+export type Maturity =
+  | "Beginner"
+  | "Startup Ready"
+  | "Production Ready"
+  | "Enterprise Ready"
+  | "FAANG-Scale Architecture";
 
 export interface AnalysisResult {
   overall: number;
@@ -431,13 +437,17 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
     passed: graph.nodes.length > 0 && rule.satisfied(graph, ctx),
   }));
 
+  const empty = graph.nodes.length === 0;
+
   const categories: CategoryScore[] = CATEGORIES.map((category) => {
     const inCat = results.filter((r) => r.rule.category === category);
     const total = inCat.reduce((sum, r) => sum + SEVERITY_WEIGHT[r.rule.severity], 0);
     const earned = inCat
       .filter((r) => r.passed)
       .reduce((sum, r) => sum + SEVERITY_WEIGHT[r.rule.severity], 0);
-    const score = total === 0 ? 100 : Math.round((earned / total) * 100);
+    // An empty canvas — or a category with no applicable rules — cannot be
+    // scored; it must never be reported as a perfect 100.
+    const score = empty || total === 0 ? null : Math.round((earned / total) * 100);
     return {
       category,
       score,
@@ -453,7 +463,15 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
   const overall = weightedTotal === 0 ? 0 : Math.round((weightedEarned / weightedTotal) * 100);
 
   const maturity: Maturity =
-    overall >= 92 ? "FAANG Scale" : overall >= 75 ? "Enterprise Ready" : overall >= 50 ? "Startup Ready" : "Student Project";
+    overall >= 92
+      ? "FAANG-Scale Architecture"
+      : overall >= 82
+        ? "Enterprise Ready"
+        : overall >= 68
+          ? "Production Ready"
+          : overall >= 45
+            ? "Startup Ready"
+            : "Beginner";
 
   return {
     overall,
@@ -477,7 +495,8 @@ export function explainAnalysis(result: AnalysisResult, ctx: ProjectContext): st
   if (result.nodeCount === 0) {
     return "The canvas is empty. Drag services from the component library and connect them to run a meaningful review.";
   }
-  const worst = [...result.categories].sort((a, b) => a.score - b.score)[0];
+  const scored = result.categories.filter((c) => c.score !== null);
+  const worst = [...scored].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
   const top = result.issues.slice(0, 3).map((i) => i.rule.issue.toLowerCase());
   const list =
     top.length === 0

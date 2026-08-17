@@ -27,11 +27,15 @@ import {
   Type as TypeIcon,
   Undo2,
   Wand2,
+  FilePlus2,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BOUNDARY_KINDS, findService, type CloudId } from "@/lib/catalog";
 import { analyzeArchitecture, type AnalysisResult, type ProjectContext } from "@/lib/ruleEngine";
+import { computeAutoLayout } from "@/lib/autoLayout";
+import { estimateCost } from "@/lib/costEngine";
+import { loadGraph, saveGraph } from "@/lib/session";
 import { BoundaryNode, ServiceNode, TextNode } from "./nodes";
 import { ComponentLibrary } from "./ComponentLibrary";
 import { ReviewPanel } from "./ReviewPanel";
@@ -44,15 +48,21 @@ const nodeTypes = { service: ServiceNode, boundary: BoundaryNode, text: TextNode
 let idCounter = 0;
 const nextId = () => `n${++idCounter}_${Date.now().toString(36)}`;
 
-export function DesignerWorkspace({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () => void }) {
+interface WorkspaceProps {
+  ctx: ProjectContext;
+  onEditContext: () => void;
+  onNewProject: () => void;
+}
+
+export function DesignerWorkspace(props: WorkspaceProps) {
   return (
     <ReactFlowProvider>
-      <Inner ctx={ctx} onEditContext={onEditContext} />
+      <Inner {...props} />
     </ReactFlowProvider>
   );
 }
 
-function Inner({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () => void }) {
+function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [libCollapsed, setLibCollapsed] = useState(false);
@@ -63,6 +73,36 @@ function Inner({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () 
   const past = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const future = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
+
+  // Restore the in-progress diagram when the user returns to the designer.
+  useEffect(() => {
+    const stored = loadGraph();
+    if (stored?.nodes?.length || stored?.edges?.length) {
+      setNodes(stored.nodes as Node[]);
+      setEdges(stored.edges as Edge[]);
+      setTimeout(() => fitView({ padding: 0.2 }), 80);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    saveGraph({ nodes, edges });
+  }, [nodes, edges]);
+
+  const cost = useMemo(
+    () =>
+      estimateCost(
+        nodes
+          .filter((n) => n.type === "service")
+          .map((n) => {
+            const d = n.data as { serviceId: string; label: string };
+            const svc = findService(ctx.cloud, d.serviceId);
+            return { id: n.id, serviceId: d.serviceId, label: d.label, caps: svc?.caps ?? [] };
+          }),
+        ctx,
+      ),
+    [nodes, ctx],
+  );
 
   const snapshot = useCallback(() => {
     past.current = [...past.current.slice(-40), { nodes, edges }];
@@ -188,20 +228,47 @@ function Inner({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () 
   };
 
   const autoLayout = () => {
-    snapshot();
     const services = nodes.filter((n) => n.type === "service");
-    const indeg = new Map(services.map((n) => [n.id, 0]));
-    edges.forEach((e) => indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1));
-    const ranked = [...services].sort((a, b) => (indeg.get(a.id) ?? 0) - (indeg.get(b.id) ?? 0));
-    const perRow = 4;
+    if (services.length < 2) {
+      toast.error("Add at least two components before running Auto Layout.");
+      return;
+    }
+    snapshot();
+
+    const layoutNodes = services.map((n) => {
+      const d = n.data as { serviceId: string; label: string };
+      const svc = findService(ctx.cloud, d.serviceId);
+      return { id: n.id, label: d.label, caps: svc?.caps ?? [] };
+    });
+
+    const { positions, edges: flowEdges, warnings, summary } = computeAutoLayout(layoutNodes, ctx);
+
     setNodes((nds) =>
-      nds.map((n) => {
-        const idx = ranked.findIndex((r) => r.id === n.id);
-        if (idx === -1) return n;
-        return { ...n, position: { x: 80 + (idx % perRow) * 240, y: 80 + Math.floor(idx / perRow) * 150 } };
-      }),
+      nds.map((n) => (positions[n.id] ? { ...n, position: positions[n.id]! } : n)),
     );
-    setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60);
+
+    setEdges(
+      flowEdges.map((e, i) => ({
+        id: `auto-${i}-${e.source}-${e.target}`,
+        source: e.source,
+        target: e.target,
+        type: "smoothstep",
+        animated: true,
+        style: { stroke: "var(--primary)" },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--primary)" },
+      })),
+    );
+
+    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 80);
+
+    if (warnings.length) {
+      warnings.forEach((w) => toast.warning(w, { duration: 8000 }));
+    }
+    toast.success("Architecture flow generated successfully based on your selected components and project requirements.", {
+      description: summary || undefined,
+      action: { label: "Undo Auto Layout", onClick: () => undo() },
+      duration: 10000,
+    });
   };
 
   const addText = () => {
@@ -261,6 +328,9 @@ function Inner({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () 
           </Button>
           <Button variant="ghost" size="sm" onClick={() => toast.success("Export queued (PNG / PDF)")}>
             <Download className="size-4" /> Export
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onNewProject}>
+            <FilePlus2 className="size-4" /> New
           </Button>
           <Button size="sm" onClick={runReview}>
             <Sparkles className="size-4" /> Review Architecture
@@ -326,6 +396,7 @@ function Inner({ ctx, onEditContext }: { ctx: ProjectContext; onEditContext: () 
         <ReviewPanel
           result={result}
           ctx={ctx}
+          cost={cost}
           collapsed={reviewCollapsed}
           onToggle={() => setReviewCollapsed((v) => !v)}
           onRun={runReview}

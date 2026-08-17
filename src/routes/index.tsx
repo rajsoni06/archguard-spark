@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { DesignerWorkspace } from "@/components/designer/DesignerWorkspace";
 import { SetupScreen } from "@/components/designer/SetupScreen";
 import type { ProjectContext } from "@/lib/ruleEngine";
+import { clearSession, loadContext, saveContext } from "@/lib/session";
 
 const TITLE = "Architecture Designer — ArchGuard AI";
 const DESCRIPTION =
@@ -24,6 +25,15 @@ export const Route = createFileRoute("/")({
 function DesignerPage() {
   const [ctx, setCtx] = useState<ProjectContext | null>(null);
   const [editing, setEditing] = useState(false);
+  const [restored, setRestored] = useState(false);
+
+  // Restore the active project so navigating away and back never resets setup.
+  useEffect(() => {
+    setCtx(loadContext());
+    setRestored(true);
+  }, []);
+
+  if (!restored) return <AppShell>{null}</AppShell>;
 
   return (
     <AppShell>
@@ -32,12 +42,21 @@ function DesignerPage() {
           {...(ctx ? { initial: ctx } : {})}
           onStart={(next) => {
             setCtx(next);
+            saveContext(next);
             setEditing(false);
           }}
           {...(ctx ? { onCancel: () => setEditing(false) } : {})}
         />
       ) : (
-        <DesignerWorkspace ctx={ctx} onEditContext={() => setEditing(true)} />
+        <DesignerWorkspace
+          ctx={ctx}
+          onEditContext={() => setEditing(true)}
+          onNewProject={() => {
+            clearSession();
+            setCtx(null);
+            setEditing(false);
+          }}
+        />
       )}
     </AppShell>
   );

@@ -6,13 +6,16 @@ import {
   History,
   LayoutDashboard,
   LayoutTemplate,
+  Moon,
   Settings,
+  Sun,
   ShieldCheck,
   Users,
   Workflow,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/useTheme";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +31,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
@@ -62,6 +66,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="px-2 pb-2">
+          <button
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          >
+            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+          </button>
+        </div>
 
         <div className="border-t border-sidebar-border p-3">
           <div className="rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">

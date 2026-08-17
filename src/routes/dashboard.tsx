@@ -31,7 +31,7 @@ const STATS = [
 const RECENT = [
   { name: "E-Commerce Platform Architecture", meta: "AWS • Microservices • 10M+ Users", score: 87, level: "Enterprise Ready" },
   { name: "Retail Banking Core", meta: "Azure • Layered • 1M+ Users", score: 74, level: "Startup Ready" },
-  { name: "Telemetry Ingestion Pipeline", meta: "GCP • Event-Driven • 10M+ Users", score: 91, level: "FAANG Scale" },
+  { name: "Telemetry Ingestion Pipeline", meta: "GCP • Event-Driven • 10M+ Users", score: 91, level: "FAANG-Scale" },
 ];
 
 function DashboardPage() {
@@ -101,10 +101,11 @@ function DashboardPage() {
             <div className="rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold">Maturity levels</h2>
               <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-                <li>Student Project — below 50</li>
-                <li>Startup Ready — 50 to 74</li>
-                <li>Enterprise Ready — 75 to 91</li>
-                <li>FAANG Scale — 92 and above</li>
+                <li>Beginner — below 45</li>
+                <li>Startup Ready — 45 to 67</li>
+                <li>Production Ready — 68 to 81</li>
+                <li>Enterprise Ready — 82 to 91</li>
+                <li>FAANG-Scale Architecture — 92 and above</li>
               </ul>
             </div>
           </section>
