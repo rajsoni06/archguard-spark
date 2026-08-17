@@ -101,10 +101,11 @@ function DashboardPage() {
             <div className="rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold">Maturity levels</h2>
               <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-                <li>Student Project — below 50</li>
-                <li>Startup Ready — 50 to 74</li>
-                <li>Enterprise Ready — 75 to 91</li>
-                <li>FAANG Scale — 92 and above</li>
+                <li>Beginner — below 45</li>
+                <li>Startup Ready — 45 to 67</li>
+                <li>Production Ready — 68 to 81</li>
+                <li>Enterprise Ready — 82 to 91</li>
+                <li>FAANG-Scale Architecture — 92 and above</li>
               </ul>
             </div>
           </section>
