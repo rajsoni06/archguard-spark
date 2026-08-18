@@ -496,7 +496,12 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <ComponentLibrary cloud={ctx.cloud} collapsed={libCollapsed} onToggle={() => setLibCollapsed((v) => !v)} />
+        <ComponentLibrary
+          cloud={ctx.cloud}
+          collapsed={libCollapsed}
+          onToggle={() => setLibCollapsed((v) => !v)}
+          onAdd={addFromLibrary}
+        />
 
         <div ref={wrapper} className="relative min-w-0 flex-1 bg-background">
           <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur">
@@ -526,6 +531,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onDrop={onDrop}
+            onBeforeDelete={onBeforeDelete}
+            onDelete={onDelete}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
@@ -555,6 +562,10 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           ctx={ctx}
           cost={cost}
           collapsed={reviewCollapsed}
+          width={reviewWidth}
+          onResize={(w) => setReviewWidth(Math.min(MAX_REVIEW_W, Math.max(MIN_REVIEW_W, w)))}
+          nodeCount={nodes.filter((n) => n.type === "service").length}
+          onFocusLibrary={() => setLibCollapsed(false)}
           onToggle={() => setReviewCollapsed((v) => !v)}
           onRun={runReview}
         />
