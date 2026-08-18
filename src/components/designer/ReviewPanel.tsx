@@ -321,11 +321,11 @@ function CostCard({
   if (!cost.available) {
     return (
       <div className="rounded-xl border border-border bg-card p-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
           Estimated Monthly Cost
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">$0 / month</div>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-foreground/70">
           Add cloud services to calculate your estimated infrastructure cost.
         </p>
       </div>
@@ -334,23 +334,23 @@ function CostCard({
 
   return (
     <div className="rounded-xl border border-border bg-card p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
         Estimated Monthly Cost
       </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-2xl font-semibold tabular-nums transition-all">
+        <span className="text-[28px] font-semibold leading-none tabular-nums transition-all">
           {formatUsd(cost.total)}
         </span>
-        <span className="text-[11px] text-muted-foreground">/ month</span>
+        <span className="text-xs text-foreground/70">/ month</span>
       </div>
-      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-success">
+      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-success">
         ↓ {cost.deltaPercent}%
-        <span className="text-muted-foreground">vs an unoptimized {ctx.cloud.toUpperCase()} baseline</span>
+        <span className="text-foreground/70">vs an unoptimized {ctx.cloud.toUpperCase()} baseline</span>
       </div>
 
       <button
         onClick={() => setShowBreakdown((v) => !v)}
-        className="mt-2.5 flex w-full items-center justify-between rounded-md border border-border px-2 py-1.5 text-[11px] transition-colors hover:bg-accent"
+        className="mt-2.5 flex w-full items-center justify-between rounded-md border border-border px-2 py-2 text-xs font-medium transition-colors hover:bg-accent"
       >
         View Cost Breakdown
         <ChevronDown className={cn("size-3.5 transition-transform", showBreakdown && "rotate-180")} />
@@ -359,12 +359,12 @@ function CostCard({
       {showBreakdown ? (
         <div className="mt-2 space-y-1 border-t border-border pt-2">
           {cost.lines.map((l) => (
-            <div key={l.label} className="flex items-center justify-between text-[11px]">
-              <span className="truncate text-muted-foreground">{l.label}</span>
-              <span className="tabular-nums">{formatUsd(l.amount)}</span>
+            <div key={l.label} className="flex items-center justify-between py-0.5 text-xs">
+              <span className="truncate font-medium text-foreground/85">{l.label}</span>
+              <span className="font-medium tabular-nums text-foreground">{formatUsd(l.amount)}</span>
             </div>
           ))}
-          <div className="mt-1 flex items-center justify-between border-t border-border pt-1.5 text-[11px] font-semibold">
+          <div className="mt-1 flex items-center justify-between border-t border-border pt-1.5 text-xs font-semibold">
             <span>Estimated Total</span>
             <span className="tabular-nums">{formatUsd(cost.total)}</span>
           </div>
@@ -373,7 +373,7 @@ function CostCard({
 
       <button
         onClick={() => setShowAssumptions((v) => !v)}
-        className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-2 py-1.5 text-[11px] transition-colors hover:bg-accent"
+        className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-2 py-2 text-xs font-medium transition-colors hover:bg-accent"
       >
         View Assumptions
         <ChevronDown className={cn("size-3.5 transition-transform", showAssumptions && "rotate-180")} />
@@ -381,9 +381,9 @@ function CostCard({
       {showAssumptions ? (
         <div className="mt-2 space-y-1 border-t border-border pt-2">
           {cost.assumptions.map((a) => (
-            <div key={a.label} className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">{a.label}</span>
-              <span>{a.value}</span>
+            <div key={a.label} className="flex items-center justify-between py-0.5 text-xs">
+              <span className="font-medium text-foreground/85">{a.label}</span>
+              <span className="font-medium text-foreground">{a.value}</span>
             </div>
           ))}
         </div>
@@ -391,39 +391,45 @@ function CostCard({
 
       {cost.recommendations.length ? (
         <div className="mt-3 space-y-2 border-t border-border pt-2.5">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
             <PiggyBank className="size-3.5" /> Cost Optimization
           </div>
           {cost.recommendations.map((r) => (
             <div key={r.title} className="rounded-lg border border-border p-2">
-              <div className="flex gap-1.5 text-[11px] font-medium">
+              <div className="flex gap-1.5 text-xs font-semibold">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0 text-warning" />
                 {r.title}
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{r.detail}</p>
-              <div className="mt-1 text-[11px] text-success">
+              <p className="mt-1 text-xs leading-relaxed text-foreground/75">{r.detail}</p>
+              <div className="mt-1 text-xs font-medium text-success">
                 Potential savings ~{formatUsd(r.savings)}/month
               </div>
             </div>
           ))}
-          <div className="grid grid-cols-3 gap-2 rounded-lg bg-surface-2 p-2 text-center text-[10px]">
+          <div className="grid grid-cols-3 gap-2 rounded-lg bg-surface-2 p-3 text-center">
             <div>
-              <div className="text-muted-foreground">Current</div>
-              <div className="font-semibold tabular-nums">{formatUsd(cost.total)}</div>
+              <div className="text-[13px] font-semibold text-foreground">Current</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground/80">
+                {formatUsd(cost.total)}
+              </div>
             </div>
             <div>
-              <div className="text-muted-foreground">Optimized</div>
-              <div className="font-semibold tabular-nums">{formatUsd(cost.optimized)}</div>
+              <div className="text-[13px] font-semibold text-foreground">Optimized</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-foreground/80">
+                {formatUsd(cost.optimized)}
+              </div>
             </div>
             <div>
-              <div className="text-muted-foreground">Savings</div>
-              <div className="font-semibold tabular-nums text-success">{formatUsd(cost.savings)}</div>
+              <div className="text-[13px] font-semibold text-foreground">Savings</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-success">
+                {formatUsd(cost.savings)}
+              </div>
             </div>
           </div>
         </div>
       ) : null}
 
-      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="mt-2 text-[11px] leading-relaxed text-foreground/60">
         Estimate only — real bills vary with region, usage, discounts, committed capacity, data
         transfer and taxes.
       </p>
@@ -431,10 +437,28 @@ function CostCard({
   );
 }
 
+function EmptyArchitecture({ onFocusLibrary }: { onFocusLibrary: () => void }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center">
+      <div className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/25">
+        <LayoutDashboard className="size-5" />
+      </div>
+      <div className="mt-3 text-sm font-semibold">No Architecture to Analyze</div>
+      <p className="mt-1.5 max-w-[260px] text-[13px] leading-relaxed text-foreground/70">
+        Your canvas is empty. Add components to start the security, scalability and performance
+        analysis.
+      </p>
+      <Button size="sm" className="mt-4" onClick={onFocusLibrary}>
+        Start Designing
+      </Button>
+    </div>
+  );
+}
+
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
         {title}
       </div>
       <ul className="space-y-2">{children}</ul>
@@ -443,5 +467,5 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function Empty({ text }: { text: string }) {
-  return <li className="text-xs text-muted-foreground">{text}</li>;
+  return <li className="text-[13px] text-foreground/65">{text}</li>;
 }
