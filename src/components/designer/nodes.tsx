@@ -1,6 +1,30 @@
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
+import { Trash2 } from "lucide-react";
 import { BOUNDARY_KINDS, findService, type CloudId } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
+
+export const DELETE_NODE_EVENT = "archguard:delete-node";
+
+/** Small, unobtrusive delete affordance shown on hover or selection. */
+function DeleteControl({ id, selected }: { id: string; selected?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label="Delete component"
+      title="Delete component"
+      onClick={(e) => {
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent(DELETE_NODE_EVENT, { detail: { id } }));
+      }}
+      className={cn(
+        "nodrag absolute -right-2.5 -top-2.5 z-20 flex size-5 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-sm transition-opacity hover:bg-destructive hover:text-destructive-foreground",
+        selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+      )}
+    >
+      <Trash2 className="size-3" />
+    </button>
+  );
+}
 
 export interface ServiceNodeData extends Record<string, unknown> {
   serviceId: string;
@@ -9,7 +33,7 @@ export interface ServiceNodeData extends Record<string, unknown> {
   status?: "ok" | "warning" | "critical";
 }
 
-export function ServiceNode({ data, selected }: NodeProps) {
+export function ServiceNode({ id, data, selected }: NodeProps) {
   const d = data as ServiceNodeData;
   const svc = findService(d.cloud, d.serviceId);
   const Icon = svc?.icon;
@@ -24,6 +48,7 @@ export function ServiceNode({ data, selected }: NodeProps) {
       )}
       style={{ boxShadow: "0 6px 18px -12px oklch(0 0 0 / 0.9)" }}
     >
+      <DeleteControl id={id} selected={selected} />
       <Handle type="target" position={Position.Top} className="!size-2 !border-none !bg-primary/70" />
       <Handle type="target" position={Position.Left} className="!size-2 !border-none !bg-primary/70" />
       <div className="flex items-center gap-2.5">
@@ -58,7 +83,7 @@ export interface BoundaryNodeData extends Record<string, unknown> {
   label: string;
 }
 
-export function BoundaryNode({ data, selected }: NodeProps) {
+export function BoundaryNode({ id, data, selected }: NodeProps) {
   const d = data as BoundaryNodeData;
   const def = BOUNDARY_KINDS.find((b) => b.id === d.kind) ?? BOUNDARY_KINDS[0]!;
 
@@ -66,12 +91,13 @@ export function BoundaryNode({ data, selected }: NodeProps) {
     <>
       <NodeResizer minWidth={180} minHeight={120} isVisible={selected} color="var(--primary)" />
       <div
-        className="size-full rounded-xl border-2 border-dashed"
+        className="group size-full rounded-xl border-2 border-dashed"
         style={{
           borderColor: `color-mix(in oklab, ${def.color} 55%, transparent)`,
           backgroundColor: `color-mix(in oklab, ${def.color} 7%, transparent)`,
         }}
       >
+        <DeleteControl id={id} selected={selected} />
         <span
           className="absolute -top-2.5 left-3 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
           style={{ borderColor: `color-mix(in oklab, ${def.color} 45%, transparent)`, color: def.color }}

@@ -248,15 +248,18 @@
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   color: var(--foreground);
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 .react-flow__controls-button:hover {
   background: var(--accent);
+  color: var(--primary);
 }
 .react-flow__controls-button svg {
   fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0.6;
   color: var(--foreground);
-  max-width: 13px;
-  max-height: 13px;
+  max-width: 15px;
+  max-height: 15px;
 }

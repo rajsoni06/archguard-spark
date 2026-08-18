@@ -36,8 +36,8 @@ import { analyzeArchitecture, type AnalysisResult, type ProjectContext } from "@
 import { computeAutoLayout } from "@/lib/autoLayout";
 import { estimateCost } from "@/lib/costEngine";
 import { loadGraph, saveGraph } from "@/lib/session";
-import { BoundaryNode, ServiceNode, TextNode } from "./nodes";
-import { ComponentLibrary } from "./ComponentLibrary";
+import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode } from "./nodes";
+import { ComponentLibrary, type LibraryPayload } from "./ComponentLibrary";
 import { ReviewPanel } from "./ReviewPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,35 @@ const nodeTypes = { service: ServiceNode, boundary: BoundaryNode, text: TextNode
 
 let idCounter = 0;
 const nextId = () => `n${++idCounter}_${Date.now().toString(36)}`;
+
+const NODE_W = 176;
+const NODE_H = 66;
+const GAP = 42;
+const MIN_REVIEW_W = 300;
+const MAX_REVIEW_W = 620;
+
+/** Finds the first free slot on a grid so click-added nodes never overlap. */
+function findFreeSlot(existing: Node[], origin: { x: number; y: number }) {
+  const taken = existing
+    .filter((n) => n.type !== "boundary")
+    .map((n) => n.position);
+  const clash = (x: number, y: number) =>
+    taken.some((p) => Math.abs(p.x - x) < NODE_W + GAP / 2 && Math.abs(p.y - y) < NODE_H + GAP / 2);
+
+  const colW = NODE_W + GAP;
+  const rowH = NODE_H + GAP;
+  for (let ring = 0; ring < 24; ring++) {
+    for (let col = 0; col <= ring; col++) {
+      for (let row = 0; row <= ring; row++) {
+        if (col !== ring && row !== ring) continue;
+        const x = origin.x + col * colW;
+        const y = origin.y + row * rowH;
+        if (!clash(x, y)) return { x, y };
+      }
+    }
+  }
+  return { x: origin.x, y: origin.y + 26 * rowH };
+}
 
 interface WorkspaceProps {
   ctx: ProjectContext;
@@ -67,12 +96,18 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [libCollapsed, setLibCollapsed] = useState(false);
   const [reviewCollapsed, setReviewCollapsed] = useState(false);
+  const [reviewWidth, setReviewWidth] = useState(360);
   const [tool, setTool] = useState<"select" | "pan">("select");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const past = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const future = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
-  const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
+  const graphRef = useRef<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  const pendingDelete = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const { screenToFlowPosition, fitView, zoomIn, zoomOut, deleteElements, getViewport } =
+    useReactFlow();
+
+  graphRef.current = { nodes, edges };
 
   // Restore the in-progress diagram when the user returns to the designer.
   useEffect(() => {
@@ -124,6 +159,99 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     setNodes(next.nodes);
     setEdges(next.edges);
   };
+
+  const restore = useCallback(
+    (state: { nodes: Node[]; edges: Edge[] }) => {
+      setNodes(state.nodes);
+      setEdges(state.edges);
+    },
+    [setNodes, setEdges],
+  );
+
+  // React Flow already strips edges attached to a removed node; we only add the
+  // snapshot + undo affordance around it so deletion is safe.
+  const onBeforeDelete = useCallback(async () => {
+    pendingDelete.current = {
+      nodes: [...graphRef.current.nodes],
+      edges: [...graphRef.current.edges],
+    };
+    return true;
+  }, []);
+
+  const onDelete = useCallback(
+    ({ nodes: removed }: { nodes: Node[]; edges: Edge[] }) => {
+      const before = pendingDelete.current;
+      pendingDelete.current = null;
+      if (!before || removed.length === 0) return;
+      past.current = [...past.current.slice(-40), before];
+      future.current = [];
+      const label =
+        removed.length === 1
+          ? `${(removed[0]!.data as { label?: string }).label ?? "Component"} removed from architecture.`
+          : `${removed.length} components removed from architecture.`;
+      toast(label, {
+        description: "Connected links were removed too.",
+        action: { label: "Undo", onClick: () => restore(before) },
+        duration: 7000,
+      });
+    },
+    [restore],
+  );
+
+  // Delete affordance rendered on each node dispatches through React Flow so
+  // edges, selection and history all stay consistent.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const id = (event as CustomEvent<{ id: string }>).detail?.id;
+      if (!id) return;
+      void deleteElements({ nodes: [{ id }] });
+    };
+    window.addEventListener(DELETE_NODE_EVENT, handler);
+    return () => window.removeEventListener(DELETE_NODE_EVENT, handler);
+  }, [deleteElements]);
+
+  const addFromLibrary = useCallback(
+    (payload: LibraryPayload) => {
+      snapshot();
+      const vp = getViewport();
+      const box = wrapper.current?.getBoundingClientRect();
+      const originX = (-vp.x + (box ? box.width * 0.2 : 160)) / vp.zoom;
+      const originY = (-vp.y + (box ? box.height * 0.18 : 120)) / vp.zoom;
+
+      if (payload.kind === "boundary") {
+        setNodes((nds) => [
+          {
+            id: nextId(),
+            type: "boundary",
+            position: { x: Math.round(originX), y: Math.round(originY) },
+            data: { kind: payload.id, label: payload.label },
+            style: { width: 380, height: 240 },
+            zIndex: -1,
+          } as Node,
+          ...nds,
+        ]);
+        return;
+      }
+
+      setNodes((nds) => {
+        const position = findFreeSlot(nds, {
+          x: Math.round(originX),
+          y: Math.round(originY),
+        });
+        return [
+          ...nds,
+          {
+            id: nextId(),
+            type: "service",
+            position,
+            data: { serviceId: payload.id, cloud: ctx.cloud as CloudId, label: payload.label },
+          } as Node,
+        ];
+      });
+      toast.success(`${payload.label} added to canvas`, { duration: 1800 });
+    },
+    [ctx.cloud, getViewport, setNodes, snapshot],
+  );
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -205,6 +333,13 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   );
 
   const runReview = () => {
+    if (nodes.filter((n) => n.type === "service").length === 0) {
+      toast.error("Architecture is empty", {
+        description: "Add at least one component to the canvas before reviewing your architecture.",
+        action: { label: "Add Components", onClick: () => setLibCollapsed(false) },
+      });
+      return;
+    }
     const graph = {
       nodes: nodes
         .filter((n) => n.type === "service")
@@ -241,10 +376,32 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       return { id: n.id, label: d.label, caps: svc?.caps ?? [] };
     });
 
-    const { positions, edges: flowEdges, warnings, summary } = computeAutoLayout(layoutNodes, ctx);
+    const boundaryNodes = nodes
+      .filter((n) => n.type === "boundary")
+      .map((n) => ({ id: n.id, kind: (n.data as { kind: string }).kind }));
+
+    const {
+      positions,
+      edges: flowEdges,
+      boundaries,
+      warnings,
+      summary,
+    } = computeAutoLayout(layoutNodes, ctx, boundaryNodes);
 
     setNodes((nds) =>
-      nds.map((n) => (positions[n.id] ? { ...n, position: positions[n.id]! } : n)),
+      nds.map((n) => {
+        if (positions[n.id]) return { ...n, position: positions[n.id]! };
+        const rect = boundaries[n.id];
+        if (rect) {
+          return {
+            ...n,
+            position: { x: rect.x, y: rect.y },
+            style: { ...n.style, width: rect.width, height: rect.height },
+            zIndex: -1,
+          };
+        }
+        return n;
+      }),
     );
 
     setEdges(
@@ -339,7 +496,12 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <ComponentLibrary cloud={ctx.cloud} collapsed={libCollapsed} onToggle={() => setLibCollapsed((v) => !v)} />
+        <ComponentLibrary
+          cloud={ctx.cloud}
+          collapsed={libCollapsed}
+          onToggle={() => setLibCollapsed((v) => !v)}
+          onAdd={addFromLibrary}
+        />
 
         <div ref={wrapper} className="relative min-w-0 flex-1 bg-background">
           <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur">
@@ -369,6 +531,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onDrop={onDrop}
+            onBeforeDelete={onBeforeDelete}
+            onDelete={onDelete}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
@@ -398,6 +562,10 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           ctx={ctx}
           cost={cost}
           collapsed={reviewCollapsed}
+          width={reviewWidth}
+          onResize={(w) => setReviewWidth(Math.min(MAX_REVIEW_W, Math.max(MIN_REVIEW_W, w)))}
+          nodeCount={nodes.filter((n) => n.type === "service").length}
+          onFocusLibrary={() => setLibCollapsed(false)}
           onToggle={() => setReviewCollapsed((v) => !v)}
           onRun={runReview}
         />
