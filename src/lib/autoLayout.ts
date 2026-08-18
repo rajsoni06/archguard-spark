@@ -12,9 +12,23 @@ export interface LayoutEdge {
   target: string;
 }
 
+export interface LayoutBoundary {
+  id: string;
+  kind: string;
+}
+
+export interface BoundaryRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface LayoutResult {
   positions: Record<string, { x: number; y: number }>;
   edges: LayoutEdge[];
+  /** Container rectangles for boundary nodes, keyed by node id. */
+  boundaries: Record<string, BoundaryRect>;
   warnings: string[];
   summary: string;
 }
