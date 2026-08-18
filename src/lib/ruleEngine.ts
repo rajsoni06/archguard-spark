@@ -431,6 +431,26 @@ export interface AnalysisResult {
 }
 
 export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): AnalysisResult {
+  // A canvas with nothing on it has not been designed yet — that is not the
+  // same thing as an insecure design. Never emit violations for it.
+  if (graph.nodes.length === 0) {
+    return {
+      overall: 0,
+      maturity: "Beginner",
+      categories: CATEGORIES.map((category) => ({
+        category,
+        score: null,
+        passed: [],
+        failed: [],
+      })),
+      strengths: [],
+      issues: [],
+      evaluatedAt: new Date().toISOString(),
+      nodeCount: 0,
+      edgeCount: graph.edges.length,
+    };
+  }
+
   const applicable = RULES.filter((r) => r.applies(ctx));
   const results: RuleResult[] = applicable.map((rule) => ({
     rule,
