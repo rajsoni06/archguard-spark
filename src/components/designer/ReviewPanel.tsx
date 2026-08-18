@@ -206,13 +206,19 @@ export function ReviewPanel({
               <TabsContent value="score" className="mt-0">
                 {isEmpty ? <EmptyArchitecture onFocusLibrary={onFocusLibrary} /> : null}
                 <div className="flex flex-col items-center py-3">
-                  <ScoreRing value={result.overall} />
+                  {isEmpty ? (
+                    <div className="text-4xl font-semibold text-foreground/40">—</div>
+                  ) : (
+                    <ScoreRing value={result.overall} />
+                  )}
                   <div className="mt-2 text-xs font-medium uppercase tracking-wider text-foreground/70">
                     Overall Architecture Score
                   </div>
-                  <Badge className="mt-2" variant="outline">
-                    {result.maturity}
-                  </Badge>
+                  {isEmpty ? null : (
+                    <Badge className="mt-2" variant="outline">
+                      {result.maturity}
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-3 space-y-2.5">
                   {result.categories.map((c) => (
