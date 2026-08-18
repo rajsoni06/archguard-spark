@@ -4,13 +4,21 @@ import { BOUNDARY_KINDS, CLOUDS, type CloudId, type ServiceDef } from "@/lib/cat
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+export interface LibraryPayload {
+  kind: "service" | "boundary";
+  id: string;
+  label: string;
+}
+
 interface Props {
   cloud: CloudId;
   collapsed: boolean;
   onToggle: () => void;
+  /** Click-to-add: places the component on the canvas at a free position. */
+  onAdd: (payload: LibraryPayload) => void;
 }
 
-export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
+export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
   const [query, setQuery] = useState("");
   const def = CLOUDS[cloud];
 
@@ -74,8 +82,11 @@ export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
         <Section title="Boundaries" icon>
           <div className="grid gap-1">
             {BOUNDARY_KINDS.map((b) => (
-              <div
+              <button
                 key={b.id}
+                type="button"
+                title={`Click to add ${b.label}`}
+                onClick={() => onAdd({ kind: "boundary", id: b.id, label: b.label })}
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData(
@@ -84,11 +95,11 @@ export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
                   );
                   e.dataTransfer.effectAllowed = "move";
                 }}
-                className="flex cursor-grab items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
+                className="flex w-full cursor-grab items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
               >
                 <span className="size-2.5 rounded-sm" style={{ backgroundColor: b.color }} />
                 {b.label}
-              </div>
+              </button>
             ))}
           </div>
         </Section>
@@ -97,7 +108,7 @@ export function ComponentLibrary({ cloud, collapsed, onToggle }: Props) {
           <Section key={cat.name} title={cat.name}>
             <div className="grid gap-1">
               {cat.services.map((svc) => (
-                <ServiceCard key={svc.id} svc={svc} cloud={cloud} />
+                <ServiceCard key={svc.id} svc={svc} cloud={cloud} onAdd={onAdd} />
               ))}
             </div>
           </Section>
@@ -132,11 +143,22 @@ function Section({
   );
 }
 
-function ServiceCard({ svc, cloud }: { svc: ServiceDef; cloud: CloudId }) {
+function ServiceCard({
+  svc,
+  cloud,
+  onAdd,
+}: {
+  svc: ServiceDef;
+  cloud: CloudId;
+  onAdd: (payload: LibraryPayload) => void;
+}) {
   const Icon = svc.icon;
   const color = cloud === "aws" ? "var(--aws)" : cloud === "azure" ? "var(--azure)" : "var(--gcp)";
   return (
-    <div
+    <button
+      type="button"
+      title={`Click to add ${svc.name}`}
+      onClick={() => onAdd({ kind: "service", id: svc.id, label: svc.name })}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(
@@ -146,7 +168,7 @@ function ServiceCard({ svc, cloud }: { svc: ServiceDef; cloud: CloudId }) {
         e.dataTransfer.effectAllowed = "move";
       }}
       className={cn(
-        "flex cursor-grab items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs transition-colors hover:border-primary/60 active:cursor-grabbing",
+        "flex w-full cursor-grab items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-left text-xs transition-colors hover:border-primary/60 active:cursor-grabbing",
       )}
     >
       <span
@@ -156,6 +178,6 @@ function ServiceCard({ svc, cloud }: { svc: ServiceDef; cloud: CloudId }) {
         <Icon className="size-3" />
       </span>
       <span className="truncate">{svc.name}</span>
-    </div>
+    </button>
   );
 }
