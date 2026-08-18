@@ -6,11 +6,13 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
+  GripVertical,
+  LayoutDashboard,
   PanelRightClose,
   PiggyBank,
   Sparkles,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScoreRing } from "./ScoreRing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,18 +26,73 @@ interface Props {
   ctx: ProjectContext;
   cost: CostEstimate;
   collapsed: boolean;
+  width: number;
+  onResize: (width: number) => void;
+  nodeCount: number;
+  onFocusLibrary: () => void;
   onToggle: () => void;
   onRun: () => void;
 }
 
-export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: Props) {
+export function ReviewPanel({
+  result,
+  ctx,
+  cost,
+  collapsed,
+  width,
+  onResize,
+  nodeCount,
+  onFocusLibrary,
+  onToggle,
+  onRun,
+}: Props) {
+  const asideRef = useRef<HTMLElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const isEmpty = nodeCount === 0;
+
+  const startResize = useCallback(() => setDragging(true), []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: MouseEvent) => {
+      const right = asideRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+      onResize(right - e.clientX);
+    };
+    const up = () => setDragging(false);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [dragging, onResize]);
+
   return (
     <aside
+      ref={asideRef}
+      style={{ width: collapsed ? 36 : width }}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface transition-[width] duration-300 ease-out",
-        collapsed ? "w-9" : "w-[330px]",
+        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface",
+        dragging ? "transition-none" : "transition-[width] duration-300 ease-out",
       )}
     >
+      {!collapsed ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize review panel"
+          onMouseDown={startResize}
+          onDoubleClick={() => onResize(360)}
+          className="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-col-resize items-center justify-center hover:bg-primary/10"
+        >
+          <GripVertical className="size-3 text-muted-foreground/60 transition-colors group-hover:text-primary" />
+        </div>
+      ) : null}
+
       <button
         onClick={onToggle}
         aria-label="Expand review panel"
@@ -49,13 +106,14 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
       </button>
 
       <div
+        style={{ width: collapsed ? 330 : width, minWidth: collapsed ? 330 : width }}
         className={cn(
-          "flex h-full w-[330px] min-w-[330px] flex-col transition-opacity duration-200",
+          "flex h-full flex-col transition-opacity duration-200",
           collapsed ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-          <span className="text-[13px] font-semibold">Architecture Review</span>
+          <span className="text-sm font-semibold">Architecture Review</span>
           <button
             onClick={onToggle}
             aria-label="Collapse review panel"
@@ -67,13 +125,16 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
 
         {!result ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Design your architecture, then run the deterministic rule engine to get category
-              scores, strengths and violations.
-            </p>
-            <Button size="sm" onClick={onRun}>
-              Review Architecture
-            </Button>
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="text-sm font-semibold">Review your architecture</div>
+              <p className="mt-2 text-[13px] leading-relaxed text-foreground/75">
+                Design your architecture, then run the deterministic rule engine to get category
+                scores, strengths and violations.
+              </p>
+              <Button className="mt-4 h-11 w-full text-sm" onClick={onRun}>
+                <Sparkles className="size-4" /> Review Architecture
+              </Button>
+            </div>
             <CostCard cost={cost} ctx={ctx} />
           </div>
         ) : (
@@ -88,10 +149,14 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
 
             <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
               <TabsContent value="analysis" className="mt-0 space-y-4">
+                {isEmpty ? (
+                  <EmptyArchitecture onFocusLibrary={onFocusLibrary} />
+                ) : (
+                  <>
                 <Group title={`Detected strengths (${result.strengths.length})`}>
                   {result.strengths.map((r) => (
-                    <li key={r.rule.id} className="flex gap-2 text-xs text-muted-foreground">
-                      <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-success" />
+                    <li key={r.rule.id} className="flex gap-2 text-[13px] leading-relaxed text-foreground/80">
+                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
                       <span>{r.rule.strength}</span>
                     </li>
                   ))}
@@ -108,7 +173,7 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
                           }`}
                         />
                         <div className="min-w-0">
-                          <div className="text-xs font-medium">{r.rule.issue}</div>
+                          <div className="text-[13px] font-medium leading-snug">{r.rule.issue}</div>
                           <div className="mt-1 flex items-center gap-1.5">
                             <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
                               {r.rule.category}
@@ -134,12 +199,15 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
                 </Group>
 
                 <CostCard cost={cost} ctx={ctx} />
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="score" className="mt-0">
+                {isEmpty ? <EmptyArchitecture onFocusLibrary={onFocusLibrary} /> : null}
                 <div className="flex flex-col items-center py-3">
                   <ScoreRing value={result.overall} />
-                  <div className="mt-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <div className="mt-2 text-xs font-medium uppercase tracking-wider text-foreground/70">
                     Overall Architecture Score
                   </div>
                   <Badge className="mt-2" variant="outline">
@@ -149,9 +217,9 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
                 <div className="mt-3 space-y-2.5">
                   {result.categories.map((c) => (
                     <div key={c.category}>
-                      <div className="mb-1 flex items-center justify-between text-[11px]">
-                        <span className="text-muted-foreground">{c.category}</span>
-                        <span className="font-medium">
+                      <div className="mb-1 flex items-center justify-between text-[13px]">
+                        <span className="font-medium text-foreground/85">{c.category}</span>
+                        <span className="font-semibold tabular-nums">
                           {c.score === null ? "N/A" : `${c.score}/100`}
                         </span>
                       </div>
@@ -188,15 +256,20 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
               </TabsContent>
 
               <TabsContent value="suggestions" className="mt-0 space-y-2">
+                {isEmpty ? <EmptyArchitecture onFocusLibrary={onFocusLibrary} /> : null}
                 {result.issues.map((r, i) => (
                   <div key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
-                    <div className="text-[11px] font-semibold text-primary">Recommendation {i + 1}</div>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                      Recommendation {i + 1}
+                    </div>
+                    <p className="mt-1 text-[13px] leading-relaxed text-foreground/80">
                       {r.rule.recommendation}
                     </p>
                   </div>
                 ))}
-                {result.issues.length === 0 ? <Empty text="Nothing to improve for this context." /> : null}
+                {!isEmpty && result.issues.length === 0 ? (
+                  <Empty text="Nothing to improve for this context." />
+                ) : null}
               </TabsContent>
 
               <TabsContent value="ai" className="mt-0 space-y-3">
@@ -204,7 +277,7 @@ export function ReviewPanel({ result, ctx, cost, collapsed, onToggle, onRun }: P
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
                     <Bot className="size-3.5" /> AI explanation
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[13px] leading-relaxed text-foreground/80">
                     {explainAnalysis(result, ctx)}
                   </p>
                 </div>
