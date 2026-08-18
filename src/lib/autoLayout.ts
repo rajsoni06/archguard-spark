@@ -73,8 +73,30 @@ function tiersForPattern(pattern: string): Tier[] {
 
 const COL_W = 250;
 const ROW_H = 130;
+const NODE_W = 176;
+const NODE_H = 66;
 
-export function computeAutoLayout(nodes: LayoutNode[], ctx: ProjectContext): LayoutResult {
+/**
+ * Which flow tiers each boundary kind is expected to contain, and how deeply
+ * it nests (lower depth = outermost container).
+ */
+const BOUNDARY_SCOPE: Record<string, { tiers: string[]; depth: number }> = {
+  region: { tiers: ["*"], depth: 0 },
+  vpc: { tiers: ["*"], depth: 1 },
+  az: { tiers: ["lb", "gateway", "compute", "messaging", "cache", "data"], depth: 2 },
+  "security-boundary": { tiers: ["edge", "waf", "lb", "gateway"], depth: 3 },
+  "public-subnet": { tiers: ["edge", "waf", "lb", "gateway"], depth: 4 },
+  "private-subnet": { tiers: ["compute", "messaging", "cache"], depth: 4 },
+  k8s: { tiers: ["compute"], depth: 5 },
+  "service-group": { tiers: ["compute", "messaging"], depth: 5 },
+  "database-layer": { tiers: ["data", "cache"], depth: 4 },
+};
+
+export function computeAutoLayout(
+  nodes: LayoutNode[],
+  ctx: ProjectContext,
+  boundaryNodes: LayoutBoundary[] = [],
+): LayoutResult {
   const tiers = tiersForPattern(ctx.pattern);
   const used = new Set<string>();
   const columns: { tier: Tier; nodes: LayoutNode[] }[] = [];
@@ -116,6 +138,41 @@ export function computeAutoLayout(nodes: LayoutNode[], ctx: ProjectContext): Lay
 
   leftovers.forEach((n, i) => {
     positions[n.id] = { x: originX + i * 200, y: originY + 420 };
+  });
+
+  // ---- boundary containers ----
+  // Boundaries are groups, not services: size each one to enclose the tiers it
+  // owns, padded by nesting depth so outer containers wrap inner ones.
+  const tierOf: Record<string, string> = {};
+  columns.forEach((col) => col.nodes.forEach((n) => (tierOf[n.id] = col.tier.id)));
+  sideGroups.forEach((g) => g.nodes.forEach((n) => (tierOf[n.id] = g.tier.id)));
+
+  const boundaries: Record<string, BoundaryRect> = {};
+  const present = [...boundaryNodes].sort(
+    (a, b) => (BOUNDARY_SCOPE[a.kind]?.depth ?? 9) - (BOUNDARY_SCOPE[b.kind]?.depth ?? 9),
+  );
+
+  present.forEach((b, index) => {
+    const scope = BOUNDARY_SCOPE[b.kind] ?? { tiers: ["*"], depth: 6 };
+    const members = nodes.filter((n) => {
+      const t = tierOf[n.id];
+      if (!t) return scope.tiers.includes("*");
+      return scope.tiers.includes("*") || scope.tiers.includes(t);
+    });
+    if (members.length === 0) return;
+
+    const xs = members.map((m) => positions[m.id]!.x);
+    const ys = members.map((m) => positions[m.id]!.y);
+    // Nested containers shrink inward; identical kinds are offset so duplicates
+    // stay distinguishable instead of stacking exactly on top of each other.
+    const pad = 74 - Math.min(scope.depth, 5) * 10 + (index % 2) * 4;
+
+    boundaries[b.id] = {
+      x: Math.min(...xs) - pad,
+      y: Math.min(...ys) - pad,
+      width: Math.max(...xs) - Math.min(...xs) + NODE_W + pad * 2,
+      height: Math.max(...ys) - Math.min(...ys) + NODE_H + pad * 2,
+    };
   });
 
   // ---- connections ----
