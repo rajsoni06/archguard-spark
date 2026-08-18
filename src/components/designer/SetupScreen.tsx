@@ -32,19 +32,21 @@ export function SetupScreen({
   const [priority, setPriority] = useState(initial?.priority ?? "Scalability");
 
   return (
-    <div className="hero-glow flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-6 py-10">
-      <div className="w-full max-w-3xl">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/30">
+    <div className="hero-glow flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-5">
+      <div className="w-full max-w-4xl">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/30">
             <ShieldCheck className="size-5" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            What cloud platform are you designing for?
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This one-time setup selects the service catalogue and the rule set used to score your
-            architecture. It disappears once you start designing.
-          </p>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight">
+              What cloud platform are you designing for?
+            </h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              This one-time setup selects the service catalogue and the rule set used to score your
+              architecture. It disappears once you start designing.
+            </p>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -56,42 +58,44 @@ export function SetupScreen({
                 key={id}
                 onClick={() => setCloud(id)}
                 className={cn(
-                  "group relative rounded-xl border bg-card p-5 text-left transition-all",
+                  "group relative flex items-center gap-3 rounded-xl border bg-card p-3.5 text-left transition-all",
                   active
                     ? "border-primary ring-2 ring-primary/25"
                     : "border-border hover:border-primary/50",
                 )}
               >
                 {active ? (
-                  <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <span className="absolute right-2.5 top-2.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
                     <Check className="size-3" />
                   </span>
                 ) : null}
                 <span
-                  className="flex size-10 items-center justify-center rounded-lg"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg"
                   style={{
                     backgroundColor: `color-mix(in oklab, ${def.colorVar} 16%, transparent)`,
                     color: def.colorVar,
                   }}
                 >
-                  <Cloud className="size-5" />
+                  <Cloud className="size-4" />
                 </span>
-                <div className="mt-3 text-sm font-semibold">{def.short}</div>
-                <div className="text-xs text-muted-foreground">{def.name}</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{def.short}</div>
+                  <div className="truncate text-xs text-muted-foreground">{def.name}</div>
+                </div>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-8 rounded-xl border border-border bg-card p-5">
-          <div className="mb-4">
+        <div className="mt-3 rounded-xl border border-border bg-card p-4">
+          <div className="mb-3">
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               Project name
             </label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9 text-sm" />
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-3.5 sm:grid-cols-2">
             <OptionGroup label="Architecture Pattern" options={ARCHITECTURE_PATTERNS} value={pattern} onChange={setPattern} />
             <OptionGroup label="Expected Users / Traffic" options={SCALES} value={scale} onChange={setScale} />
             <OptionGroup label="Industry" options={INDUSTRIES} value={industry} onChange={setIndustry} />
@@ -99,7 +103,7 @@ export function SetupScreen({
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="mt-3 flex items-center justify-end gap-2">
           {onCancel ? (
             <Button variant="ghost" onClick={onCancel}>
               Cancel
