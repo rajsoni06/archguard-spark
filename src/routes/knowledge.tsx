@@ -53,12 +53,12 @@ function KnowledgePage() {
     <AppShell>
       <PageHeader title="Knowledge Hub" subtitle="Design → Review → Learn → Improve" />
 
-      <div className="border-b border-border bg-surface/60 px-6 py-6">
-        <div className="mx-auto w-full max-w-xl text-center">
+      <div className="border-b border-border bg-surface/60 px-6 py-5">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-base font-semibold tracking-tight">
             Learn system design, scalability, security and cloud architecture
           </h2>
-          <div className="relative mt-3">
+          <div className="relative w-full lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
