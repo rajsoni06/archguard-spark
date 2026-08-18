@@ -240,5 +240,5 @@ export function computeAutoLayout(
 
   const summary = columns.map((c) => c.nodes.map((n) => n.label).join(" / ")).join(" → ");
 
-  return { positions, edges, warnings, summary };
+  return { positions, edges, boundaries, warnings, summary };
 }
