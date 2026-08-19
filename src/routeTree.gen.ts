@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DesignerRouteImport } from './routes/designer'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ProjectsRouteImport } from './routes/projects'
@@ -27,6 +28,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignerRoute = DesignerRouteImport.update({
+  id: '/designer',
+  path: '/designer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryRoute = HistoryRouteImport.update({
@@ -68,6 +74,7 @@ const TemplatesRoute = TemplatesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
   '/projects': typeof ProjectsRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
   '/projects': typeof ProjectsRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
   '/projects': typeof ProjectsRoute
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/designer'
     | '/history'
     | '/knowledge'
     | '/projects'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/designer'
     | '/history'
     | '/knowledge'
     | '/projects'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/designer'
     | '/history'
     | '/knowledge'
     | '/projects'
@@ -138,6 +150,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  DesignerRoute: typeof DesignerRoute
   HistoryRoute: typeof HistoryRoute
   KnowledgeRoute: typeof KnowledgeRoute
   ProjectsRoute: typeof ProjectsRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/designer': {
+      id: '/designer'
+      path: '/designer'
+      fullPath: '/designer'
+      preLoaderRoute: typeof DesignerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/history': {
@@ -218,6 +238,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  DesignerRoute: DesignerRoute,
   HistoryRoute: HistoryRoute,
   KnowledgeRoute: KnowledgeRoute,
   ProjectsRoute: ProjectsRoute,
