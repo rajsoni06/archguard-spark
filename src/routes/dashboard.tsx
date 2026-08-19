@@ -42,7 +42,7 @@ function DashboardPage() {
         subtitle="Architecture health across all projects"
         actions={
           <Button asChild size="sm">
-            <Link to="/">New architecture</Link>
+            <Link to="/designer">New architecture</Link>
           </Button>
         }
       />

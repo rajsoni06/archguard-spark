@@ -1,0 +1,1165 @@
+﻿diff --git a/src/lib/catalog.ts b/src/lib/catalog.ts
+index da8dbf7..8c0d371 100644
+--- a/src/lib/catalog.ts
++++ b/src/lib/catalog.ts
+@@ -3,33 +3,52 @@ import {
+   Activity,
+   Archive,
+   BarChart3,
++  Bot,
+   Boxes,
++  BrainCircuit,
++  Cable,
+   Cloud,
++  Cog,
+   Container,
+   Cpu,
+   Database,
++  Eye,
+   FileKey,
++  FlaskConical,
+   Gauge,
++  GitBranch,
+   Globe,
+   HardDrive,
++  HardDriveDownload,
+   Key,
+   Layers,
+   Lock,
+   MessageSquare,
++  MonitorDot,
+   Network,
++  Package,
++  PieChart,
++  Podcast,
+   Radio,
+   Route,
+   Scale,
++  Scan,
++  Search,
+   Server,
+   Shield,
+   ShieldCheck,
++  Shuffle,
+   Signal,
++  Sparkles,
+   Split,
++  Terminal,
+   Timer,
+   Users,
+   Waves,
+   Workflow,
++  Wrench,
+   Zap,
++  Download,
+ } from "lucide-react";
+ 
+ export type CloudId = "aws" | "azure" | "gcp";
+@@ -51,42 +70,36 @@ export type Capability =
+   | "managed-database"
+   | "nosql"
+   | "object-storage"
+-  | "block-storage"
+-  | "archive"
+-  | "queue"
+-  | "pubsub"
+-  | "streaming"
+-  | "auth"
+-  | "secrets"
+-  | "encryption"
+-  | "network"
+-  | "private-network"
+-  | "monitoring"
+-  | "tracing";
++  | "block-storage";
+ 
+-export interface ServiceDef {
++export type ServiceDef = {
+   id: string;
+   name: string;
+-  category: string;
+-  icon: LucideIcon;
+-  caps: Capability[];
+-  note?: string;
+-}
++  category?: string;
++  icon?: LucideIcon | any;
++  caps?: Capability[];
++  iconUrl?: string;
++};
+ 
+-export interface CloudDef {
++export type CategoryDef = {
++  name?: string;
++  services: ServiceDef[];
++};
++
++export type CloudDef = {
+   id: CloudId;
+   name: string;
+-  short: string;
+-  colorVar: string;
+-  categories: { name: string; services: ServiceDef[] }[];
+-}
++  short?: string;
++  colorVar?: string;
++  categories: CategoryDef[];
++};
+ 
+-const s = (
++export const s = (
+   id: string,
+   name: string,
+-  category: string,
+-  icon: LucideIcon,
+-  caps: Capability[],
++  category?: string,
++  icon?: LucideIcon | any,
++  caps: Capability[] = []
+ ): ServiceDef => ({ id, name, category, icon, caps });
+ 
+ export const CLOUDS: Record<CloudId, CloudDef> = {
+@@ -95,33 +108,385 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+     name: "Amazon Web Services",
+     short: "AWS",
+     colorVar: "var(--aws)",
+-    categories: [
++        categories: [
+       {
+         name: "Compute",
+         services: [
+-          s("ec2", "EC2", "Compute", Server, ["compute"]),
+-          s("lambda", "Lambda", "Compute", Zap, ["serverless", "compute"]),
+-          s("ecs", "ECS", "Compute", Container, ["container", "compute"]),
+-          s("eks", "EKS", "Compute", Boxes, ["container", "compute"]),
+-          s("fargate", "Fargate", "Compute", Cpu, ["container", "compute"]),
+-          s("asg", "Auto Scaling", "Compute", Scale, ["autoscaling"]),
++          s("ec2", "Amazon EC2", "Compute", Server, ["compute"]),
++          s("ec2-auto-scaling", "EC2 Auto Scaling", "Compute", Scale, ["autoscaling", "compute"]),
++          s("lambda", "AWS Lambda", "Compute", Zap, ["serverless", "compute"]),
++          s("fargate", "AWS Fargate", "Compute", Server, ["serverless", "compute"]),
++          s("ecs", "Amazon ECS", "Compute", Boxes, ["container", "compute"]),
++          s("eks", "Amazon EKS", "Compute", Boxes, ["container", "compute"]),
++          s("elastic-beanstalk", "Elastic Beanstalk", "Compute", Cloud, ["compute"]),
++          s("batch", "AWS Batch", "Compute", Cpu, ["compute"]),
++          s("app-runner", "App Runner", "Compute", Cloud, ["container", "compute"]),
++        ],
++      },
++      {
++        name: "Networking",
++        services: [
++          s("vpc", "Amazon VPC", "Networking", Network, ["network", "private-network"]),
++          s("public-subnet", "Public Subnet", "Networking", Split, ["network"]),
++          s("private-subnet", "Private Subnet", "Networking", Split, ["network"]),
++          s("internet-gateway", "Internet Gateway", "Networking", Globe, ["network"]),
++          s("nat-gateway", "NAT Gateway", "Networking", Network, ["network"]),
++          s("route-tables", "Route Tables", "Networking", Route, ["network"]),
++          s("security-groups", "Security Groups", "Networking", Lock, ["network"]),
++          s("network-acl", "Network ACL", "Networking", Lock, ["network"]),
++          s("elb", "Elastic Load Balancing", "Networking", Scale, ["load-balancer"]),
++          s("alb", "Application Load Balancer", "Networking", Scale, ["load-balancer"]),
++          s("nlb", "Network Load Balancer", "Networking", Scale, ["load-balancer"]),
++          s("route53", "Amazon Route 53", "Networking", Route, ["dns"]),
++          s("transit-gateway", "Transit Gateway", "Networking", Route, ["network"]),
++          s("privatelink", "AWS PrivateLink", "Networking", Shield, ["network"]),
++          s("direct-connect", "AWS Direct Connect", "Networking", Globe, ["network"]),
++          s("vpn", "AWS VPN", "Networking", Network, ["network"]),
+         ],
+       },
+       {
+         name: "Storage",
+         services: [
+-          s("s3", "S3", "Storage", Archive, ["object-storage"]),
+-          s("ebs", "EBS", "Storage", HardDrive, ["block-storage"]),
+-          s("efs", "EFS", "Storage", HardDrive, ["block-storage"]),
++          s("s3", "Amazon S3", "Storage", Archive, ["object-storage"]),
++          s("ebs", "Amazon EBS", "Storage", HardDrive, ["block-storage"]),
++          s("efs", "Amazon EFS", "Storage", HardDrive, ["block-storage"]),
++          s("fsx", "Amazon FSx", "Storage", HardDrive, ["block-storage"]),
++          s("glacier", "S3 Glacier", "Storage", Archive, ["archive"]),
++          s("storage-gateway", "Storage Gateway", "Storage", HardDrive, ["object-storage"]),
++        ],
++      },
++      {
++        name: "Database",
++        services: [
++          s("rds", "Amazon RDS", "Database", Database, ["database", "managed-database"]),
++          s("aurora", "Amazon Aurora", "Database", Database, ["database", "managed-database"]),
++          s("dynamodb", "Amazon DynamoDB", "Database", Layers, ["database", "nosql"]),
++          s("documentdb", "Amazon DocumentDB", "Database", Layers, ["database", "nosql"]),
++          s("keyspaces", "Amazon Keyspaces", "Database", Layers, ["database", "nosql"]),
++          s("elasticache", "Amazon ElastiCache", "Database", Gauge, ["cache"]),
++          s("opensearch", "Amazon OpenSearch", "Database", Database, ["database"]),
++          s("redshift", "Amazon Redshift", "Database", Database, ["database"]),
++        ],
++      },
++      {
++        name: "Integration",
++        services: [
++          s("api-gateway", "API Gateway", "Integration", Workflow, ["api-gateway"]),
++          s("appsync", "AWS AppSync", "Integration", Globe, ["api-gateway"]),
++          s("eventbridge", "Amazon EventBridge", "Integration", Workflow, ["pubsub"]),
++          s("sqs", "Amazon SQS", "Integration", MessageSquare, ["queue"]),
++          s("sns", "Amazon SNS", "Integration", Radio, ["pubsub"]),
++          s("step-functions", "AWS Step Functions", "Integration", Workflow, ["compute"]),
++          s("amazon-mq", "Amazon MQ", "Integration", MessageSquare, ["queue"]),
++          s("msk", "Amazon MSK", "Integration", Waves, ["streaming"]),
++        ],
++      },
++      {
++        name: "Security",
++        services: [
++          s("iam", "AWS IAM", "Security", ShieldCheck, ["auth"]),
++          s("cognito", "Amazon Cognito", "Security", Users, ["auth"]),
++          s("kms", "AWS KMS", "Security", Key, ["encryption"]),
++          s("secrets-manager", "Secrets Manager", "Security", FileKey, ["secrets"]),
++          s("waf", "AWS WAF", "Security", Shield, ["waf"]),
++          s("shield", "AWS Shield", "Security", Shield, ["waf"]),
++          s("guardduty", "Amazon GuardDuty", "Security", Shield, ["monitoring"]),
++          s("security-hub", "Security Hub", "Security", ShieldCheck, ["monitoring"]),
++          s("inspector", "Amazon Inspector", "Security", Shield, ["monitoring"]),
++          s("macie", "Amazon Macie", "Security", Shield, ["monitoring"]),
++          s("cloudtrail", "AWS CloudTrail", "Security", FileKey, ["monitoring"]),
++          s("network-firewall", "Network Firewall", "Security", Shield, ["waf"]),
++          s("private-ca", "Private Certificate Authority", "Security", Key, ["encryption"]),
++        ],
++      },
++      {
++        name: "Monitoring",
++        services: [
++          s("cloudwatch", "Amazon CloudWatch", "Monitoring", BarChart3, ["monitoring"]),
++          s("xray", "AWS X-Ray", "Monitoring", Activity, ["tracing"]),
++          s("config", "AWS Config", "Monitoring", Gauge, ["monitoring"]),
++          s("health-dashboard", "Health Dashboard", "Monitoring", Signal, ["monitoring"]),
++          s("systems-manager", "Systems Manager", "Monitoring", Boxes, ["monitoring"]),
++          s("prometheus", "Managed Prometheus", "Monitoring", Gauge, ["monitoring"]),
++          s("grafana", "Managed Grafana", "Monitoring", BarChart3, ["monitoring"]),
++        ],
++      },
++      {
++        name: "CDN & Edge",
++        services: [
++          s("cloudfront", "Amazon CloudFront", "CDN & Edge", Globe, ["cdn"]),
++          s("global-accelerator", "Global Accelerator", "CDN & Edge", Globe, ["cdn"]),
++        ],
++      },
++      {
++        name: "DevOps",
++        services: [
++          s("codepipeline", "CodePipeline", "DevOps", Workflow, ["compute"]),
++          s("codebuild", "CodeBuild", "DevOps", Zap, ["compute"]),
++          s("codedeploy", "CodeDeploy", "DevOps", Download, ["compute"]),
++          s("codeartifact", "CodeArtifact", "DevOps", Archive, ["compute"]),
++          s("ecr", "Amazon ECR", "DevOps", Package, ["container"]),
++          s("cloudformation", "CloudFormation", "DevOps", Boxes, ["compute"]),
++          s("cdk", "AWS CDK", "DevOps", Boxes, ["compute"]),
++          s("proton", "AWS Proton", "DevOps", FileKey, ["compute"]),
++          s("github", "GitHub", "DevOps", FileKey, ["compute"]),
++          s("github-actions", "GitHub Actions", "DevOps", Zap, ["compute"]),
++          s("jenkins", "Jenkins", "DevOps", Settings, ["compute"]),
++          s("gitlab", "GitLab CI/CD", "DevOps", Boxes, ["compute"]),
++          s("terraform", "Terraform", "DevOps", Boxes, ["compute"]),
++          s("argocd", "Argo CD", "DevOps", Boxes, ["compute"]),
++        ],
++      },
++      {
++        name: "Analytics",
++        services: [
++          s("athena", "Amazon Athena", "Analytics", Search, ["data"]),
++          s("emr", "Amazon EMR", "Analytics", Waves, ["data"]),
++          s("kinesis-streams", "Kinesis Data Streams", "Analytics", Waves, ["streaming"]),
++          s("kinesis-firehose", "Kinesis Firehose", "Analytics", Waves, ["streaming"]),
++          s("glue", "AWS Glue", "Analytics", Boxes, ["data"]),
++          s("lake-formation", "Lake Formation", "Analytics", Database, ["data"]),
++          s("quicksight", "Amazon QuickSight", "Analytics", BarChart3, ["data"]),
++        ],
++      },
++      {
++        name: "AI/ML",
++        services: [
++          s("sagemaker", "Amazon SageMaker", "AI/ML", Brain, ["compute"]),
++          s("bedrock", "Amazon Bedrock", "AI/ML", Bot, ["compute"]),
++          s("bedrock-knowledge", "Knowledge Bases", "AI/ML", Database, ["compute"]),
++          s("bedrock-agents", "AI Agents", "AI/ML", Bot, ["compute"]),
++          s("rekognition", "Amazon Rekognition", "AI/ML", Activity, ["compute"]),
++          s("textract", "Amazon Textract", "AI/ML", Activity, ["compute"]),
++          s("comprehend", "Amazon Comprehend", "AI/ML", Activity, ["compute"]),
++          s("transcribe", "Amazon Transcribe", "AI/ML", Activity, ["compute"]),
++          s("polly", "Amazon Polly", "AI/ML", Activity, ["compute"]),
++          s("translate", "Amazon Translate", "AI/ML", Activity, ["compute"]),
++        ],
++      },
++      {
++        name: "Migration",
++        services: [
++          s("migration-hub", "Migration Hub", "Migration", Split, ["compute"]),
++          s("app-migration", "App Migration Service", "Migration", Split, ["compute"]),
++          s("dms", "AWS DMS", "Migration", Split, ["compute"]),
++          s("datasync", "AWS DataSync", "Migration", HardDrive, ["compute"]),
++          s("transfer-family", "Transfer Family", "Migration", HardDrive, ["compute"]),
++          s("snow-family", "Snow Family", "Migration", HardDrive, ["compute"]),
++          s("outposts", "AWS Outposts", "Migration", Server, ["compute"]),
++        ],
++      },
++      {
++        name: "Management",
++        services: [
++          s("organizations", "Organizations", "Management", Layers, ["compute"]),
++          s("control-tower", "Control Tower", "Management", ShieldCheck, ["compute"]),
++          s("ram", "Resource Access Manager", "Management", Key, ["compute"]),
++          s("service-catalog", "Service Catalog", "Management", Boxes, ["compute"]),
++          s("trusted-advisor", "Trusted Advisor", "Management", ShieldCheck, ["monitoring"]),
++          s("cost-explorer", "Cost Explorer", "Management", BarChart3, ["monitoring"]),
++          s("budgets", "AWS Budgets", "Management", BarChart3, ["monitoring"]),
++        ],
++      },
++      {
++        name: "IoT",
++        services: [
++          s("iot-core", "IoT Core", "IoT", Radio, ["compute"]),
++          s("iot-greengrass", "IoT Greengrass", "IoT", Cloud, ["compute"]),
++          s("iot-device-mgmt", "IoT Device Management", "IoT", Radio, ["compute"]),
++          s("iot-events", "IoT Events", "IoT", Radio, ["compute"]),
++          s("iot-sitewise", "IoT SiteWise", "IoT", Radio, ["compute"]),
++          s("iot-twinmaker", "IoT TwinMaker", "IoT", Radio, ["compute"]),
++        ],
++      },
++      {
++        name: "Developer Services",
++        services: [
++          s("appconfig", "AWS AppConfig", "Developer Services", Settings, ["compute"]),
++          s("amplify", "AWS Amplify", "Developer Services", Smartphone, ["compute"]),
++          s("cloudshell", "AWS CloudShell", "Developer Services", Terminal, ["compute"]),
++          s("cloud9", "AWS Cloud9", "Developer Services", Boxes, ["compute"]),
++        ],
++      }import type { LucideIcon } from "lucide-react";
++import {
++  Activity,
++  Archive,
++  BarChart3,
++  Bot,
++  Boxes,
++  BrainCircuit,
++  Cable,
++  Cloud,
++  Cog,
++  Container,
++  Cpu,
++  Database,
++  Eye,
++  FileKey,
++  FlaskConical,
++  Gauge,
++  GitBranch,
++  Globe,
++  HardDrive,
++  HardDriveDownload,
++  Key,
++  Layers,
++  Lock,
++  MessageSquare,
++  MonitorDot,
++  Network,
++  Package,
++  PieChart,
++  Podcast,
++  Radio,
++  Route,
++  Scale,
++  Scan,
++  Search,
++  Server,
++  Shield,
++  ShieldCheck,
++  Shuffle,
++  Signal,
++  Sparkles,
++  Split,
++  Terminal,
++  Timer,
++  Users,
++  Waves,
++  Workflow,
++  Wrench,
++  Zap,
++  Download,
++} from "lucide-react";
++
++export type CloudId = "aws" | "azure" | "gcp";
++
++/** Capability tags consumed by the deterministic rule engine. */
++export type Capability =
++  | "client"
++  | "dns"
++  | "cdn"
++  | "waf"
++  | "load-balancer"
++  | "api-gateway"
++  | "compute"
++  | "container"
++  | "serverless"
++  | "autoscaling"
++  | "cache"
++  | "database"
++  | "managed-database"
++  | "nosql"
++  | "object-storage"
++  | "block-storage";
++
++export type ServiceDef = {
++  id: string;
++  name: string;
++  category?: string;
++  icon?: LucideIcon | any;
++  caps?: Capability[];
++  iconUrl?: string;
++};
++
++export type CategoryDef = {
++  name?: string;
++  services: ServiceDef[];
++};
++
++export type CloudDef = {
++  id: CloudId;
++  name: string;
++  short?: string;
++  colorVar?: string;
++  categories: CategoryDef[];
++};
++
++export const s = (
++  id: string,
++  name: string,
++  category?: string,
++  icon?: LucideIcon | any,
++  caps: Capability[] = []
++): ServiceDef => ({ id, name, category, icon, caps });
++
++export const CLOUDS: Record<CloudId, CloudDef> = {
++  aws: {
++    id: "aws",
++    name: "Amazon Web Services",
++    short: "AWS",
++    colorVar: "var(--aws)",
++    categories: [
++      {
++        name: "AI/ML",
++        services: [
++          s("bedrock", "Bedrock", "AI/ML", Bot, ["compute"]),
++          s("comprehend", "Comprehend", "AI/ML", Activity, ["compute"]),
++        ],
++      },
++      {
++        name: "Developer Tools",
++        services: [
++          s("codecommit", "CodeCommit", "Developer Tools", FileKey, ["compute"]),
++          s("codebuild", "CodeBuild", "Developer Tools", Zap, ["compute"]),
++          s("codepipeline", "CodePipeline", "Developer Tools", Workflow, ["compute"]),
++          s("codedeploy", "CodeDeploy", "Developer Tools", Download, ["compute"]),
++          s("codeartifact", "CodeArtifact", "Developer Tools", Archive, ["compute"]),
++          s("cdk", "AWS CDK", "Developer Tools", Boxes, ["compute"]),
++        ],
++      },
++      {
++        name: "Management",
++        services: [
++          s("cloudtrail", "CloudTrail", "Management", FileKey, ["monitoring"]),
++          s("config", "AWS Config", "Management", Gauge, ["monitoring"]),
++          s("organizations", "Organizations", "Management", Layers, ["compute"]),
++          s("cloudformation", "CloudFormation", "Management", Boxes, ["compute"]),
++          s("service-catalog", "AWS Service Catalog", "Management", Boxes, ["compute"]),
++          s("trusted-advisor", "Trusted Advisor", "Management", ShieldCheck, ["monitoring"]),
++          s("cost-explorer", "AWS Cost Explorer", "Management", BarChart3, ["monitoring"]),
++          s("budgets", "AWS Budgets", "Management", BarChart3, ["monitoring"]),
++        ],
++      },
++      {
++        name: "Migration",
++        services: [
++          s("dms", "Database Migration Service", "Migration", Split, ["compute"]),
++          s("migration-hub", "Migration Hub", "Migration", Split, ["compute"]),
++          s("application-migration-service", "Application Migration Service", "Migration", Split, ["compute"]),
++          s("datasync", "DataSync", "Migration", HardDrive, ["compute"]),
++          s("transfer-family", "AWS Transfer Family", "Migration", HardDrive, ["compute"]),
++          s("snow-family", "AWS Snow Family", "Migration", HardDrive, ["compute"]),
++          s("sms", "Server Migration Service", "Migration", HardDrive, ["compute"]),
++        ],
++      },
++      {
++        name: "IoT",
++        services: [
++          s("iotcore", "IoT Core", "IoT", Radio, ["compute"]),
++          s("greengrass", "IoT Greengrass", "IoT", Cloud, ["compute"]),
++          s("iot-device-management", "IoT Device Management", "IoT", Radio, ["compute"]),
++          s("iot-events", "IoT Events", "IoT", Radio, ["compute"]),
++          s("iot-sitewise", "IoT SiteWise", "IoT", Radio, ["compute"]),
++          s("iot-twinmaker", "IoT TwinMaker", "IoT", Radio, ["compute"]),
++        ],
++      },
++      {
++        name: "Storage",
++        services: [
++          { id: "s3", name: "S3", category: "Storage", icon: Archive, caps: ["object-storage"], iconUrl: "/icons/aws.svg" },
++          { id: "ebs", name: "EBS", category: "Storage", icon: HardDrive, caps: ["block-storage"], iconUrl: "/icons/aws.svg" },
++          { id: "efs", name: "EFS", category: "Storage", icon: HardDrive, caps: ["block-storage"], iconUrl: "/icons/aws.svg" },
+           s("glacier", "Glacier", "Storage", Archive, ["archive"]),
+         ],
+       },
+       {
+         name: "Database",
+         services: [
+-          s("rds", "RDS", "Database", Database, ["database", "managed-database"]),
+-          s("aurora", "Aurora", "Database", Database, ["database", "managed-database"]),
+-          s("dynamodb", "DynamoDB", "Database", Layers, ["database", "nosql"]),
++          { id: "rds", name: "RDS", category: "Database", icon: Database, caps: ["database", "managed-database"], iconUrl: "/icons/aws.svg" },
++          { id: "aurora", name: "Aurora", category: "Database", icon: Database, caps: ["database", "managed-database"], iconUrl: "/icons/aws.svg" },
++          { id: "dynamodb", name: "DynamoDB", category: "Database", icon: Layers, caps: ["database", "nosql"], iconUrl: "/icons/aws.svg" },
+           s("elasticache", "ElastiCache", "Database", Gauge, ["cache"]),
+           s("documentdb", "DocumentDB", "Database", Layers, ["database", "nosql"]),
+         ],
+@@ -130,40 +495,138 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+         name: "Networking",
+         services: [
+           s("vpc", "VPC", "Networking", Network, ["network", "private-network"]),
+-          s("subnet", "Subnet", "Networking", Split, ["network"]),
+-          s("route53", "Route 53", "Networking", Route, ["dns"]),
+-          s("cloudfront", "CloudFront", "Networking", Globe, ["cdn"]),
+-          s("apigw", "API Gateway", "Networking", Workflow, ["api-gateway"]),
+-          s("alb", "Application Load Balancer", "Networking", Scale, ["load-balancer"]),
+-          s("nat", "NAT Gateway", "Networking", Network, ["network"]),
++          { id: "public-subnet", name: "Public Subnet", category: "Networking", icon: Split, caps: ["network" ] },
++          { id: "private-subnet", name: "Private Subnet", category: "Networking", icon: Split, caps: ["network" ] },
++          { id: "internet-gateway", name: "Internet Gateway", category: "Networking", icon: Globe, caps: ["network"] },
++          { id: "route-table", name: "Route Table", category: "Networking", icon: Route, caps: ["network"] },
++          { id: "network-acl", name: "Network ACL", category: "Networking", icon: Lock, caps: ["network"] },
++          { id: "route53", name: "Route 53", category: "Networking", icon: Route, caps: ["dns"], iconUrl: "/icons/aws.svg" },
++          { id: "cloudfront", name: "CloudFront", category: "Networking", icon: Globe, caps: ["cdn"], iconUrl: "/icons/aws.svg" },
++          { id: "apigw", name: "API Gateway", category: "Networking", icon: Workflow, caps: ["api-gateway"], iconUrl: "/icons/aws.svg" },
++          { id: "alb", name: "Application Load Balancer", category: "Networking", icon: Scale, caps: ["load-balancer"], iconUrl: "/icons/aws.svg" },
++          { id: "nlb", name: "Network Load Balancer", category: "Networking", icon: Scale, caps: ["load-balancer"] },
++          { id: "nat", name: "NAT Gateway", category: "Networking", icon: Network, caps: ["network"], iconUrl: "/icons/aws.svg" },
++          { id: "transit-gateway", name: "Transit Gateway", category: "Networking", icon: Route, caps: ["network"] },
++          { id: "privatelink", name: "PrivateLink", category: "Networking", icon: Shield, caps: ["network"] },
++          { id: "directconnect", name: "Direct Connect", category: "Networking", icon: Globe, caps: ["network"] },
++          { id: "vpn", name: "VPN", category: "Networking", icon: Network, caps: ["network"] },
+         ],
+       },
+       {
+         name: "Security",
+         services: [
+-          s("iam", "IAM", "Security", ShieldCheck, ["auth"]),
+-          s("cognito", "Cognito", "Security", Users, ["auth"]),
+-          s("waf", "WAF", "Security", Shield, ["waf"]),
+-          s("kms", "KMS", "Security", Key, ["encryption"]),
+-          s("secrets", "Secrets Manager", "Security", FileKey, ["secrets"]),
+-          s("sg", "Security Groups", "Security", Lock, ["private-network"]),
++          { id: "iam", name: "IAM", category: "Security", icon: ShieldCheck, caps: ["auth"], iconUrl: "/icons/aws.svg" },
++          { id: "cognito", name: "Cognito", category: "Security", icon: Users, caps: ["auth"], iconUrl: "/icons/aws.svg" },
++          { id: "waf", name: "WAF", category: "Security", icon: Shield, caps: ["waf"], iconUrl: "/icons/aws.svg" },
++          { id: "kms", name: "KMS", category: "Security", icon: Key, caps: ["encryption"], iconUrl: "/icons/aws.svg" },
++          { id: "secrets", name: "Secrets Manager", category: "Security", icon: FileKey, caps: ["secrets"], iconUrl: "/icons/aws.svg" },
++          { id: "sg", name: "Security Groups", category: "Security", icon: Lock, caps: ["private-network"], iconUrl: "/icons/aws.svg" },
++          { id: "acm", name: "Certificate Manager", category: "Security", icon: FileKey, caps: ["secrets", "encryption"] },
++          { id: "network-firewall", name: "AWS Network Firewall", category: "Security", icon: Shield, caps: ["waf"] },
++          { id: "private-ca", name: "Private Certificate Authority", category: "Security", icon: Key, caps: ["encryption"] },
+         ],
+       },
+       {
+         name: "Messaging",
+         services: [
+-          s("sqs", "SQS", "Messaging", MessageSquare, ["queue"]),
+-          s("sns", "SNS", "Messaging", Radio, ["pubsub"]),
++          { id: "sqs", name: "SQS", category: "Messaging", icon: MessageSquare, caps: ["queue"], iconUrl: "/icons/aws.svg" },
++          { id: "sns", name: "SNS", category: "Messaging", icon: Radio, caps: ["pubsub"], iconUrl: "/icons/aws.svg" },
+           s("eventbridge", "EventBridge", "Messaging", Workflow, ["pubsub"]),
+           s("kinesis", "Kinesis", "Messaging", Waves, ["streaming"]),
+           s("msk", "MSK", "Messaging", Waves, ["streaming"]),
+         ],
+       },
++      {
++        name: "Application Integration",
++        services: [
++          s("stepfunctions", "Step Functions", "Application Integration", Workflow, ["compute"]),
++          s("appsync", "AppSync", "Application Integration", Globe, ["api-gateway"]),
++          s("mq", "Amazon MQ", "Application Integration", MessageSquare, ["queue"]),
++          s("swf", "SWF", "Application Integration", Workflow, ["compute"]),
++        ],
++      },
+       {
+         name: "Monitoring",
+         services: [
+-          s("cloudwatch", "CloudWatch", "Monitoring", BarChart3, ["monitoring"]),
++          { id: "cloudwatch", name: "CloudWatch", category: "Monitoring", icon: BarChart3, caps: ["monitoring"], iconUrl: "/icons/aws.svg" },
+           s("xray", "X-Ray", "Monitoring", Activity, ["tracing"]),
++          s("prometheus", "Amazon Managed Service for Prometheus", "Monitoring", Gauge, ["monitoring"]),
++          s("managed-grafana", "Amazon Managed Grafana", "Monitoring", BarChart3, ["monitoring"]),
++          s("health-dashboard", "AWS Health Dashboard", "Monitoring", Signal, ["monitoring"]),
++        ],
++      },
++      {
++        name: "Edge & CDN",
++        services: [
++          s("cloudfront", "CloudFront", "Edge & CDN", Globe, ["cdn"]),
++          s("globalaccelerator", "Global Accelerator", "Edge & CDN", Globe, ["cdn"]),
++          s("appmesh", "App Mesh", "Edge & CDN", Network, ["network"]),
++        ],
++      },
++      {
++        name: "Compute (Extended)",
++        services: [
++          s("lightsail", "Lightsail", "Compute", Server, ["compute"]),
++          s("batch", "Batch", "Compute", Cpu, ["compute"]),
++          s("elasticbeanstalk", "Elastic Beanstalk", "Compute", Cloud, ["compute"]),
++          s("outposts", "Outposts", "Compute", Server, ["compute"]),
++          s("ec2inf", "EC2 Instance Connect", "Compute", Key, ["compute"]),
++        ],
++      },
++      {
++        name: "Storage (Extended)",
++        services: [
++          s("fsx", "FSx", "Storage", HardDrive, ["block-storage"]),
++          s("storagegateway", "Storage Gateway", "Storage", HardDrive, ["object-storage"]),
++          s("backup", "AWS Backup", "Storage", HardDrive, ["object-storage"]),
++          s("ebs-snapshot", "EBS Snapshot", "Storage", HardDrive, ["block-storage"]),
++        ],
++      },
++      {
++        name: "Database (Extended)",
++        services: [
++          s("neptune", "Neptune", "Database", Database, ["database"]),
++          s("timestream", "Timestream", "Database", Database, ["database"]),
++          s("qldb", "QLDB", "Database", Database, ["database"]),
++          s("elasticdb", "Amazon Aurora Serverless", "Database", Database, ["database"]),
++        ],
++      },
++      {
++        name: "Security & Identity (Extended)",
++        services: [
++          s("guardduty", "GuardDuty", "Security & Identity", Shield, ["monitoring"]),
++          s("securityhub", "Security Hub", "Security & Identity", ShieldCheck, ["monitoring"]),
++          s("macie", "Macie", "Security & Identity", Shield, ["monitoring"]),
++          s("inspector", "Inspector", "Security & Identity", Shield, ["monitoring"]),
++        ],
++      },
++      {
++        name: "Analytics (Extended)",
++        services: [
++          s("emr", "EMR", "Analytics", Waves, ["streaming"]),
++          s("kda", "Kinesis Data Analytics", "Analytics", Waves, ["streaming"]),
++          s("dataexchange", "Data Exchange", "Analytics", Boxes, ["data"]),
++          s("datapipeline", "Data Pipeline", "Analytics", Workflow, ["data"]),
++        ],
++      },
++      {
++        name: "AI/ML (Extended)",
++        services: [
++          s("rekognition", "Rekognition", "AI/ML", Activity, ["compute"]),
++          s("translate", "Translate", "AI/ML", Activity, ["compute"]),
++          s("transcribe", "Transcribe", "AI/ML", Activity, ["compute"]),
++          s("lex", "Lex", "AI/ML", Bot, ["compute"]),
++          s("polly", "Polly", "AI/ML", Activity, ["compute"]),
++          s("bedrock-agents", "Bedrock Agents", "AI/ML", Bot, ["compute"]),
++        ],
++      },
++      {
++        name: "Developer Tools (Extended)",
++        services: [
++          s("cloud9", "Cloud9", "Developer Tools", Boxes, ["compute"]),
++          s("cloudshell", "CloudShell", "Developer Tools", Boxes, ["compute"]),
++          s("codestar", "CodeStar", "Developer Tools", Zap, ["compute"]),
++          s("proton", "Proton", "Developer Tools", FileKey, ["compute"]),
+         ],
+       },
+       {
+@@ -184,71 +647,192 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+       {
+         name: "Compute",
+         services: [
+-          s("vm", "Virtual Machines", "Compute", Server, ["compute"]),
+-          s("functions", "Functions", "Compute", Zap, ["serverless", "compute"]),
++          s("vm", "Azure Virtual Machines", "Compute", Server, ["compute"]),
++          s("vmss", "VM Scale Sets", "Compute", Scale, ["autoscaling", "compute"]),
++          s("functions", "Azure Functions", "Compute", Zap, ["serverless", "compute"]),
+           s("appservice", "App Service", "Compute", Cloud, ["compute"]),
+-          s("aks", "AKS", "Compute", Boxes, ["container", "compute"]),
+-          s("aci", "Container Instances", "Compute", Container, ["container", "compute"]),
+-          s("vmss", "VM Scale Sets", "Compute", Scale, ["autoscaling"]),
++          s("batch", "Azure Batch", "Compute", Cpu, ["compute"]),
++          s("springapps", "Azure Spring Apps", "Compute", Cloud, ["compute"]),
++          s("vmware", "Azure VMware Solution", "Compute", Server, ["compute"]),
++          s("spotvms", "Azure Spot Virtual Machines", "Compute", Server, ["compute"]),
++          s("computefleet", "Azure Compute Fleet", "Compute", Scale, ["autoscaling", "compute"]),
++          s("vmimagebuilder", "VM Image Builder", "Compute", Package, ["compute"]),
++        ],
++      },
++      {
++        name: "Containers & Kubernetes",
++        services: [
++          s("aks", "Azure Kubernetes Service", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("containerapps", "Container Apps", "Containers & Kubernetes", Container, ["container", "serverless"]),
++          s("aci", "Container Instances", "Containers & Kubernetes", Container, ["container", "compute"]),
++          s("acr", "Container Registry", "Containers & Kubernetes", Package, ["container"]),
++          s("openshift", "Azure Red Hat OpenShift", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("aksfleet", "Kubernetes Fleet Manager", "Containers & Kubernetes", Boxes, ["container"]),
++          s("containerstorage", "Azure Container Storage", "Containers & Kubernetes", HardDrive, ["block-storage"]),
++          s("servicefabric", "Azure Service Fabric", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("aksedge", "AKS Edge Essentials", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++        ],
++      },
++      {
++        name: "Networking",
++        services: [
++          s("vnet", "Azure Virtual Network", "Networking", Network, ["network", "private-network"]),
++          s("vnetmanager", "Virtual Network Manager", "Networking", Network, ["network", "private-network"]),
++          s("lb", "Azure Load Balancer", "Networking", Scale, ["load-balancer"]),
++          s("appgw", "Application Gateway", "Networking", Scale, ["load-balancer", "waf"]),
++          s("appgw-containers", "App Gateway for Containers", "Networking", Scale, ["load-balancer"]),
++          s("frontdoor", "Azure Front Door", "Networking", Globe, ["cdn", "load-balancer"]),
++          s("trafficmanager", "Traffic Manager", "Networking", Shuffle, ["load-balancer"]),
++          s("dns", "Azure DNS", "Networking", Route, ["dns"]),
++          s("privatedns", "Azure Private DNS", "Networking", Route, ["dns", "private-network"]),
++          s("natgw", "NAT Gateway", "Networking", Network, ["network"]),
++          s("vpngw", "VPN Gateway", "Networking", Lock, ["private-network"]),
++          s("expressroute", "ExpressRoute", "Networking", Cable, ["private-network"]),
++          s("virtualwan", "Azure Virtual WAN", "Networking", Network, ["network"]),
++          s("privatelink", "Azure Private Link", "Networking", Lock, ["private-network"]),
++          s("bastion", "Azure Bastion", "Networking", ShieldCheck, ["private-network"]),
++        ],
++      },
++      {
++        name: "CDN, Edge & Web",
++        services: [
++          s("cdn", "Azure CDN", "CDN, Edge & Web", Globe, ["cdn"]),
++          s("frontdoor-cdn", "Azure Front Door", "CDN, Edge & Web", Globe, ["cdn", "load-balancer"]),
++          s("webpubsub", "Azure Web PubSub", "CDN, Edge & Web", Radio, ["pubsub"]),
++          s("signalr", "Azure SignalR Service", "CDN, Edge & Web", Waves, ["streaming"]),
++          s("staticwebapps", "Static Web Apps", "CDN, Edge & Web", Globe, ["compute"]),
++          s("communicationservices", "Communication Services", "CDN, Edge & Web", MessageSquare, ["compute"]),
++        ],
++      },
++      {
++        name: "API & Integration",
++        services: [
++          s("apim", "API Management", "API & Integration", Workflow, ["api-gateway"]),
++          s("logicapps", "Logic Apps", "API & Integration", GitBranch, ["compute"]),
++          s("servicebus", "Service Bus", "API & Integration", MessageSquare, ["queue"]),
++          s("eventgrid", "Event Grid", "API & Integration", Radio, ["pubsub"]),
++          s("eventhubs", "Event Hubs", "API & Integration", Waves, ["streaming"]),
++          s("notificationhubs", "Notification Hubs", "API & Integration", Radio, ["pubsub"]),
++          s("relay", "Azure Relay", "API & Integration", Cable, ["compute"]),
++          s("webpubsub-api", "Web PubSub", "API & Integration", Radio, ["pubsub"]),
++          s("signalr-api", "SignalR Service", "API & Integration", Waves, ["streaming"]),
++          s("datafactory", "Azure Data Factory", "API & Integration", Shuffle, ["compute"]),
++        ],
++      },
++      {
++        name: "Databases",
++        services: [
++          s("sqldb", "Azure SQL Database", "Databases", Database, ["database", "managed-database"]),
++          s("sqlmi", "SQL Managed Instance", "Databases", Database, ["database", "managed-database"]),
++          s("sqlvm", "SQL Server on Azure VMs", "Databases", Database, ["database"]),
++          s("pgflex", "Azure Database for PostgreSQL", "Databases", Database, ["database", "managed-database"]),
++          s("mysqldb", "Azure Database for MySQL", "Databases", Database, ["database", "managed-database"]),
++          s("cosmos", "Azure Cosmos DB", "Databases", Layers, ["database", "nosql"]),
++          s("documentdb", "Azure DocumentDB", "Databases", Layers, ["database", "nosql"]),
++          s("managedredis", "Azure Managed Redis", "Databases", Gauge, ["cache"]),
++          s("rediscache", "Azure Cache for Redis", "Databases", Gauge, ["cache"]),
++          s("cassandra", "Azure Database for Apache Cassandra", "Databases", Layers, ["database", "nosql"]),
++          s("mariadb", "Azure Database for MariaDB", "Databases", Database, ["database", "managed-database"]),
++          s("synapse", "Azure Synapse Analytics", "Databases", BarChart3, ["database"]),
++          s("dataexplorer", "Azure Data Explorer", "Databases", Search, ["database"]),
++          s("dbmigration", "Database Migration Service", "Databases", Shuffle, ["compute"]),
++          s("horizondb", "Azure HorizonDB", "Databases", Database, ["database"]),
+         ],
+       },
+       {
+         name: "Storage",
+         services: [
+-          s("blob", "Blob Storage", "Storage", Archive, ["object-storage"]),
+-          s("disk", "Managed Disks", "Storage", HardDrive, ["block-storage"]),
++          s("blob", "Azure Blob Storage", "Storage", Archive, ["object-storage"]),
+           s("files", "Azure Files", "Storage", HardDrive, ["block-storage"]),
+-          s("archive-tier", "Archive Storage", "Storage", Archive, ["archive"]),
++          s("disk", "Azure Disk Storage", "Storage", HardDrive, ["block-storage"]),
++          s("queuestorage", "Azure Queue Storage", "Storage", MessageSquare, ["queue"]),
++          s("tablestorage", "Azure Table Storage", "Storage", Layers, ["database"]),
++          s("datalake", "Data Lake Storage Gen2", "Storage", HardDriveDownload, ["object-storage"]),
++          s("storagemover", "Azure Storage Mover", "Storage", Shuffle, ["compute"]),
++          s("netappfiles", "Azure NetApp Files", "Storage", HardDrive, ["block-storage"]),
+         ],
+       },
+       {
+-        name: "Database",
++        name: "Identity & Access",
+         services: [
+-          s("sqldb", "Azure SQL", "Database", Database, ["database", "managed-database"]),
+-          s("pgflex", "PostgreSQL Flexible", "Database", Database, [
+-            "database",
+-            "managed-database",
+-          ]),
+-          s("cosmos", "Cosmos DB", "Database", Layers, ["database", "nosql"]),
+-          s("rediscache", "Azure Cache for Redis", "Database", Gauge, ["cache"]),
++          s("entraid", "Microsoft Entra ID", "Identity & Access", ShieldCheck, ["auth"]),
++          s("entrads", "Entra Domain Services", "Identity & Access", ShieldCheck, ["auth"]),
++          s("entraexternal", "Entra External ID", "Identity & Access", Users, ["auth"]),
++          s("entraverified", "Entra Verified ID", "Identity & Access", ShieldCheck, ["auth"]),
++          s("managedidentity", "Managed Identities", "Identity & Access", Lock, ["auth"]),
++          s("rbac", "Role-Based Access Control", "Identity & Access", ShieldCheck, ["auth"]),
++          s("pim", "Privileged Identity Management", "Identity & Access", Lock, ["auth"]),
++          s("keyvault", "Azure Key Vault", "Identity & Access", FileKey, ["secrets", "encryption"]),
+         ],
+       },
+       {
+-        name: "Networking",
++        name: "Security",
+         services: [
+-          s("vnet", "Virtual Network", "Networking", Network, ["network", "private-network"]),
+-          s("subnet", "Subnet", "Networking", Split, ["network"]),
+-          s("dns", "Azure DNS", "Networking", Route, ["dns"]),
+-          s("cdn", "Azure CDN", "Networking", Globe, ["cdn"]),
+-          s("apim", "API Management", "Networking", Workflow, ["api-gateway"]),
+-          s("appgw", "Application Gateway", "Networking", Scale, ["load-balancer", "waf"]),
+-          s("frontdoor", "Front Door", "Networking", Globe, ["cdn", "load-balancer"]),
++          s("defendercloud", "Defender for Cloud", "Security", Shield, ["monitoring"]),
++          s("sentinel", "Microsoft Sentinel", "Security", Eye, ["monitoring"]),
++          s("ddos", "Azure DDoS Protection", "Security", Shield, ["waf"]),
++          s("firewall", "Azure Firewall", "Security", Lock, ["private-network"]),
++          s("firewallmanager", "Azure Firewall Manager", "Security", Lock, ["private-network"]),
++          s("waf", "Web Application Firewall", "Security", Shield, ["waf"]),
++          s("defenderendpoint", "Defender for Endpoint", "Security", Shield, ["monitoring"]),
++          s("defenderidentity", "Defender for Identity", "Security", Shield, ["monitoring"]),
++          s("defenderstorage", "Defender for Storage", "Security", Shield, ["monitoring"]),
++          s("defenderservers", "Defender for Servers", "Security", Shield, ["monitoring"]),
+         ],
+       },
+       {
+-        name: "Security",
++        name: "Monitoring & Observability",
+         services: [
+-          s("entra", "Entra ID", "Security", ShieldCheck, ["auth"]),
+-          s("waf", "Azure WAF", "Security", Shield, ["waf"]),
+-          s("keyvault", "Key Vault", "Security", FileKey, ["secrets", "encryption"]),
+-          s("nsg", "Network Security Group", "Security", Lock, ["private-network"]),
+-          s("defender", "Defender for Cloud", "Security", Shield, ["monitoring"]),
++          s("monitor", "Azure Monitor", "Monitoring & Observability", BarChart3, ["monitoring"]),
++          s("appinsights", "Application Insights", "Monitoring & Observability", Activity, ["monitoring"]),
++          s("loganalytics", "Log Analytics Workspace", "Monitoring & Observability", Layers, ["monitoring"]),
++          s("grafana", "Azure Managed Grafana", "Monitoring & Observability", PieChart, ["monitoring"]),
++          s("prometheus", "Azure Managed Prometheus", "Monitoring & Observability", MonitorDot, ["monitoring"]),
++          s("networkwatcher", "Network Watcher", "Monitoring & Observability", Eye, ["monitoring"]),
++          s("servicehealth", "Azure Service Health", "Monitoring & Observability", Activity, ["monitoring"]),
++          s("advisor", "Azure Advisor", "Monitoring & Observability", Sparkles, ["monitoring"]),
+         ],
+       },
+       {
+-        name: "Messaging",
++        name: "DevOps & Developer Tools",
+         services: [
+-          s("servicebus", "Service Bus", "Messaging", MessageSquare, ["queue"]),
+-          s("eventgrid", "Event Grid", "Messaging", Radio, ["pubsub"]),
+-          s("eventhubs", "Event Hubs", "Messaging", Waves, ["streaming"]),
+-          s("queuestorage", "Queue Storage", "Messaging", MessageSquare, ["queue"]),
++          s("devops", "Azure DevOps", "DevOps & Developer Tools", Wrench, ["compute"]),
++          s("repos", "Azure Repos", "DevOps & Developer Tools", GitBranch, ["compute"]),
++          s("pipelines", "Azure Pipelines", "DevOps & Developer Tools", GitBranch, ["compute"]),
++          s("boards", "Azure Boards", "DevOps & Developer Tools", Cog, ["compute"]),
++          s("artifacts", "Azure Artifacts", "DevOps & Developer Tools", Package, ["compute"]),
++          s("testplans", "Azure Test Plans", "DevOps & Developer Tools", FlaskConical, ["compute"]),
++          s("deploymentenvs", "Deployment Environments", "DevOps & Developer Tools", Terminal, ["compute"]),
++          s("azd", "Azure Developer CLI", "DevOps & Developer Tools", Terminal, ["compute"]),
+         ],
+       },
+       {
+-        name: "Monitoring",
++        name: "Analytics & Data Engineering",
+         services: [
+-          s("monitor", "Azure Monitor", "Monitoring", BarChart3, ["monitoring"]),
+-          s("appinsights", "Application Insights", "Monitoring", Activity, ["tracing"]),
++          s("synapse-analytics", "Azure Synapse Analytics", "Analytics & Data Engineering", BarChart3, ["database"]),
++          s("databricks", "Azure Databricks", "Analytics & Data Engineering", Cpu, ["compute"]),
++          s("adf", "Azure Data Factory", "Analytics & Data Engineering", Shuffle, ["compute"]),
++          s("streamanalytics", "Azure Stream Analytics", "Analytics & Data Engineering", Waves, ["streaming"]),
++          s("adx", "Azure Data Explorer", "Analytics & Data Engineering", Search, ["database"]),
++          s("adls", "Azure Data Lake Storage", "Analytics & Data Engineering", HardDriveDownload, ["object-storage"]),
++          s("fabric", "Microsoft Fabric", "Analytics & Data Engineering", Layers, ["database"]),
++          s("purview", "Microsoft Purview", "Analytics & Data Engineering", Scan, ["compute"]),
++          s("powerbi", "Power BI", "Analytics & Data Engineering", PieChart, ["monitoring"]),
++        ],
++      },
++      {
++        name: "AI / ML",
++        services: [
++          s("msfoundry", "Microsoft Foundry", "AI / ML", Sparkles, ["compute"]),
++          s("azureopenai", "Azure OpenAI in Foundry Models", "AI / ML", Bot, ["compute"]),
++          s("foundryagent", "Foundry Agent Service", "AI / ML", Bot, ["compute"]),
++          s("aisearch", "Azure AI Search", "AI / ML", Search, ["database"]),
++          s("aml", "Azure Machine Learning", "AI / ML", BrainCircuit, ["compute"]),
++          s("documentintelligence", "Azure AI Document Intelligence", "AI / ML", Scan, ["compute"]),
++          s("aispeech", "Azure AI Speech", "AI / ML", Radio, ["compute"]),
++          s("ailanguage", "Azure AI Language", "AI / ML", MessageSquare, ["compute"]),
++          s("aivision", "Azure AI Vision", "AI / ML", Eye, ["compute"]),
++          s("aicontentsafety", "Azure AI Content Safety", "AI / ML", Shield, ["compute"]),
+         ],
+       },
+       {
+@@ -256,6 +840,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+         services: [
+           s("users", "Users", "Clients", Users, ["client"]),
+           s("mobile", "Mobile App", "Clients", Signal, ["client"]),
++          s("browser", "Web Browser", "Clients", Globe, ["client"]),
++          s("iot", "IoT Device", "Clients", Podcast, ["client"]),
+         ],
+       },
+     ],
+@@ -270,11 +856,48 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+         name: "Compute",
+         services: [
+           s("gce", "Compute Engine", "Compute", Server, ["compute"]),
+-          s("cloudfunctions", "Cloud Functions", "Compute", Zap, ["serverless", "compute"]),
+-          s("cloudrun", "Cloud Run", "Compute", Container, ["container", "compute"]),
+-          s("gke", "GKE", "Compute", Boxes, ["container", "compute"]),
++          s("mig", "Managed Instance Groups", "Compute", Scale, ["autoscaling", "compute"]),
++          s("cloudrun", "Cloud Run", "Compute", Container, ["container", "serverless", "compute"]),
++          s("cloudfunctions", "Cloud Run Functions", "Compute", Zap, ["serverless", "compute"]),
+           s("appengine", "App Engine", "Compute", Cloud, ["compute"]),
+-          s("mig", "Managed Instance Group", "Compute", Scale, ["autoscaling"]),
++          s("batch", "Batch", "Compute", Layers, ["compute"]),
++          s("cloudgpu", "Cloud GPUs", "Compute", Cpu, ["compute"]),
++          s("cloudtpu", "Cloud TPUs", "Compute", BrainCircuit, ["compute"]),
++          s("soletenancy", "Sole-Tenant Nodes", "Compute", Server, ["compute"]),
++          s("baremetal", "Bare Metal Solution", "Compute", Server, ["compute"]),
++        ],
++      },
++      {
++        name: "Containers & Kubernetes",
++        services: [
++          s("gke", "Google Kubernetes Engine", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("gke-autopilot", "GKE Autopilot", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("gke-standard", "GKE Standard", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("artifactregistry", "Artifact Registry", "Containers & Kubernetes", Package, ["container"]),
++          s("vmwareengine", "Google Cloud VMware Engine", "Containers & Kubernetes", Server, ["compute"]),
++          s("distributedcloud", "Google Distributed Cloud", "Containers & Kubernetes", Globe, ["compute"]),
++          s("gke-enterprise", "GKE Enterprise", "Containers & Kubernetes", Boxes, ["container", "compute"]),
++          s("cloudservicemesh", "Cloud Service Mesh", "Containers & Kubernetes", Network, ["compute"]),
++        ],
++      },
++      {
++        name: "Networking",
++        services: [
++          s("vpc", "Virtual Private Cloud", "Networking", Network, ["network", "private-network"]),
++          s("vpcpeering", "VPC Network Peering", "Networking", Cable, ["network", "private-network"]),
++          s("clb", "Cloud Load Balancing", "Networking", Scale, ["load-balancer"]),
++          s("clouddns", "Cloud DNS", "Networking", Route, ["dns"]),
++          s("natgw", "Cloud NAT", "Networking", Network, ["network"]),
++          s("cloudrouter", "Cloud Router", "Networking", Shuffle, ["network"]),
++          s("cloudvpn", "Cloud VPN", "Networking", Lock, ["private-network"]),
++          s("interconnect", "Cloud Interconnect", "Networking", Cable, ["private-network"]),
++          s("cdn", "Cloud CDN", "Networking", Globe, ["cdn"]),
++          s("mediacdn", "Media CDN", "Networking", Globe, ["cdn"]),
++          s("armor", "Cloud Armor", "Networking", Shield, ["waf"]),
++          s("privateserviceconnect", "Private Service Connect", "Networking", Network, ["private-network"]),
++          s("ncc", "Network Connectivity Center", "Networking", Network, ["network"]),
++          s("nic", "Network Intelligence Center", "Networking", Eye, ["monitoring"]),
++          s("networktiers", "Network Service Tiers", "Networking", Globe, ["network"]),
+         ],
+       },
+       {
+@@ -282,56 +905,139 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+         services: [
+           s("gcs", "Cloud Storage", "Storage", Archive, ["object-storage"]),
+           s("pd", "Persistent Disk", "Storage", HardDrive, ["block-storage"]),
++          s("hyperdisk", "Hyperdisk", "Storage", HardDrive, ["block-storage"]),
+           s("filestore", "Filestore", "Storage", HardDrive, ["block-storage"]),
+-          s("coldline", "Coldline Archive", "Storage", Archive, ["archive"]),
++          s("localssd", "Local SSD", "Storage", HardDrive, ["block-storage"]),
++          s("netappvolumes", "NetApp Volumes", "Storage", HardDrive, ["block-storage"]),
++          s("lustre", "Google Cloud Managed Lustre", "Storage", HardDrive, ["block-storage"]),
++          s("storagetransfer", "Storage Transfer Service", "Storage", HardDriveDownload, ["object-storage"]),
+         ],
+       },
+       {
+-        name: "Database",
++        name: "Databases",
+         services: [
+-          s("cloudsql", "Cloud SQL", "Database", Database, ["database", "managed-database"]),
+-          s("spanner", "Spanner", "Database", Database, ["database", "managed-database"]),
+-          s("firestore", "Firestore", "Database", Layers, ["database", "nosql"]),
+-          s("bigtable", "Bigtable", "Database", Layers, ["database", "nosql"]),
+-          s("memorystore", "Memorystore", "Database", Gauge, ["cache"]),
++          s("cloudsql", "Cloud SQL", "Databases", Database, ["database", "managed-database"]),
++          s("alloydb", "AlloyDB for PostgreSQL", "Databases", Database, ["database", "managed-database"]),
++          s("spanner", "Cloud Spanner", "Databases", Database, ["database", "managed-database"]),
++          s("firestore", "Firestore", "Databases", Layers, ["database", "nosql"]),
++          s("bigtable", "Bigtable", "Databases", Layers, ["database", "nosql"]),
++          s("memorystore", "Memorystore", "Databases", Gauge, ["cache"]),
++          s("memorystore-redis", "Memorystore for Redis", "Databases", Gauge, ["cache"]),
++          s("memorystore-memcached", "Memorystore for Memcached", "Databases", Gauge, ["cache"]),
++          s("cloudsql-pg", "Cloud SQL for PostgreSQL", "Databases", Database, ["database", "managed-database"]),
++          s("cloudsql-mysql", "Cloud SQL for MySQL", "Databases", Database, ["database", "managed-database"]),
++          s("cloudsql-sqlserver", "Cloud SQL for SQL Server", "Databases", Database, ["database", "managed-database"]),
++          s("firebasedc", "Firebase Data Connect", "Databases", Layers, ["database", "nosql"]),
+         ],
+       },
+       {
+-        name: "Networking",
++        name: "API & Integration",
+         services: [
+-          s("vpc", "VPC", "Networking", Network, ["network", "private-network"]),
+-          s("subnet", "Subnet", "Networking", Split, ["network"]),
+-          s("clouddns", "Cloud DNS", "Networking", Route, ["dns"]),
+-          s("cdn", "Cloud CDN", "Networking", Globe, ["cdn"]),
+-          s("apigee", "Apigee API Gateway", "Networking", Workflow, ["api-gateway"]),
+-          s("clb", "Cloud Load Balancing", "Networking", Scale, ["load-balancer"]),
+-          s("natgw", "Cloud NAT", "Networking", Network, ["network"]),
++          s("apigee", "Apigee", "API & Integration", Workflow, ["api-gateway"]),
++          s("apigateway", "API Gateway", "API & Integration", Workflow, ["api-gateway"]),
++          s("cloudendpoints", "Cloud Endpoints", "API & Integration", Workflow, ["api-gateway"]),
++          s("appintegration", "Application Integration", "API & Integration", Cog, ["compute"]),
++          s("workflows", "Workflows", "API & Integration", GitBranch, ["compute"]),
++          s("tasks", "Cloud Tasks", "API & Integration", Timer, ["queue"]),
++          s("scheduler", "Cloud Scheduler", "API & Integration", Timer, ["compute"]),
++          s("eventarc", "Eventarc", "API & Integration", Zap, ["pubsub"]),
++          s("pubsub", "Pub/Sub", "API & Integration", Radio, ["pubsub", "queue"]),
++          s("integrationconnectors", "Integration Connectors", "API & Integration", Cable, ["compute"]),
+         ],
+       },
+       {
+-        name: "Security",
++        name: "Messaging & Streaming",
+         services: [
+-          s("iam", "Cloud IAM", "Security", ShieldCheck, ["auth"]),
+-          s("identityplatform", "Identity Platform", "Security", Users, ["auth"]),
+-          s("armor", "Cloud Armor", "Security", Shield, ["waf"]),
+-          s("kms", "Cloud KMS", "Security", Key, ["encryption"]),
+-          s("secretmanager", "Secret Manager", "Security", FileKey, ["secrets"]),
+-          s("firewall", "VPC Firewall", "Security", Lock, ["private-network"]),
++          s("pubsub-msg", "Pub/Sub", "Messaging & Streaming", Radio, ["pubsub", "queue"]),
++          s("pubsublite", "Pub/Sub Lite", "Messaging & Streaming", Radio, ["pubsub", "queue"]),
++          s("eventarc-msg", "Eventarc", "Messaging & Streaming", Zap, ["pubsub"]),
++          s("tasks-msg", "Cloud Tasks", "Messaging & Streaming", Timer, ["queue"]),
++          s("kafka", "Managed Apache Kafka", "Messaging & Streaming", Waves, ["streaming"]),
++          s("dataflow-msg", "Dataflow", "Messaging & Streaming", Waves, ["streaming"]),
+         ],
+       },
+       {
+-        name: "Messaging",
++        name: "Analytics",
+         services: [
+-          s("pubsub", "Pub/Sub", "Messaging", Radio, ["pubsub", "queue"]),
+-          s("tasks", "Cloud Tasks", "Messaging", Timer, ["queue"]),
+-          s("dataflow", "Dataflow", "Messaging", Waves, ["streaming"]),
++          s("bigquery", "BigQuery", "Analytics", BarChart3, ["database"]),
++          s("dataflow", "Dataflow", "Analytics", Waves, ["streaming"]),
++          s("dataproc", "Dataproc", "Analytics", Cpu, ["compute"]),
++          s("spark", "Managed Apache Spark", "Analytics", Cpu, ["compute"]),
++          s("dataplex", "Dataplex", "Analytics", Layers, ["database"]),
++          s("dataform", "Dataform", "Analytics", GitBranch, ["compute"]),
++          s("datafusion", "Data Fusion", "Analytics", Shuffle, ["compute"]),
++          s("datastream", "Datastream", "Analytics", Waves, ["streaming"]),
++          s("bqdts", "BigQuery Data Transfer Service", "Analytics", HardDriveDownload, ["database"]),
++          s("looker", "Looker", "Analytics", PieChart, ["monitoring"]),
++          s("lookerstudio", "Looker Studio", "Analytics", PieChart, ["monitoring"]),
++          s("composer", "Cloud Composer", "Analytics", Workflow, ["compute"]),
++          s("airflow", "Managed Apache Airflow", "Analytics", Workflow, ["compute"]),
++          s("bqml", "BigQuery ML", "Analytics", BrainCircuit, ["compute"]),
+         ],
+       },
+       {
+-        name: "Monitoring",
++        name: "AI / ML",
++        services: [
++          s("vertexai", "Vertex AI", "AI / ML", Bot, ["compute"]),
++          s("gemini-agent", "Gemini Enterprise Agent Platform", "AI / ML", Sparkles, ["compute"]),
++          s("gemini-api", "Gemini API", "AI / ML", Sparkles, ["compute"]),
++          s("vertexai-studio", "Vertex AI Studio", "AI / ML", FlaskConical, ["compute"]),
++          s("vertexai-agentbuilder", "Vertex AI Agent Builder", "AI / ML", Bot, ["compute"]),
++          s("vertexai-search", "Vertex AI Search", "AI / ML", Search, ["compute"]),
++          s("vertexai-vectorsearch", "Vertex AI Vector Search", "AI / ML", Search, ["database"]),
++          s("vertexai-workbench", "Vertex AI Workbench", "AI / ML", Terminal, ["compute"]),
++          s("vertexai-pipelines", "Vertex AI Pipelines", "AI / ML", Workflow, ["compute"]),
++          s("vertexai-modelregistry", "Vertex AI Model Registry", "AI / ML", Package, ["compute"]),
++          s("vertexai-featurestore", "Vertex AI Feature Store", "AI / ML", Layers, ["database"]),
++          s("cloudtpu-ai", "Cloud TPU", "AI / ML", BrainCircuit, ["compute"]),
++          s("cloudgpu-ai", "Cloud GPU", "AI / ML", Cpu, ["compute"]),
++          s("documentai", "Document AI", "AI / ML", Scan, ["compute"]),
++          s("cloudvision", "Cloud Vision API", "AI / ML", Eye, ["compute"]),
++        ],
++      },
++      {
++        name: "Security & Identity",
++        services: [
++          s("iam", "Cloud IAM", "Security & Identity", ShieldCheck, ["auth"]),
++          s("cloudidentity", "Cloud Identity", "Security & Identity", Users, ["auth"]),
++          s("iap", "Identity-Aware Proxy", "Security & Identity", Lock, ["auth"]),
++          s("secretmanager", "Secret Manager", "Security & Identity", FileKey, ["secrets"]),
++          s("kms", "Cloud KMS", "Security & Identity", Key, ["encryption"]),
++          s("cloudhsm", "Cloud HSM", "Security & Identity", Key, ["encryption"]),
++          s("cas", "Certificate Authority Service", "Security & Identity", ShieldCheck, ["encryption"]),
++          s("scc", "Security Command Center", "Security & Identity", Shield, ["waf"]),
++          s("armor-sec", "Cloud Armor", "Security & Identity", Shield, ["waf"]),
++          s("recaptcha", "reCAPTCHA Enterprise", "Security & Identity", ShieldCheck, ["auth"]),
++          s("sdp", "Sensitive Data Protection", "Security & Identity", Scan, ["compute"]),
++          s("gcpfirewall", "Google Cloud Firewall", "Security & Identity", Lock, ["private-network"]),
++        ],
++      },
++      {
++        name: "Monitoring & Observability",
+         services: [
+-          s("monitoring", "Cloud Monitoring", "Monitoring", BarChart3, ["monitoring"]),
+-          s("trace", "Cloud Trace", "Monitoring", Activity, ["tracing"]),
++          s("monitoring", "Cloud Monitoring", "Monitoring & Observability", BarChart3, ["monitoring"]),
++          s("logging", "Cloud Logging", "Monitoring & Observability", Layers, ["monitoring"]),
++          s("errorreporting", "Error Reporting", "Monitoring & Observability", Activity, ["monitoring"]),
++          s("trace", "Cloud Trace", "Monitoring & Observability", Activity, ["monitoring"]),
++          s("profiler", "Cloud Profiler", "Monitoring & Observability", Gauge, ["monitoring"]),
++          s("prometheus", "Managed Prometheus", "Monitoring & Observability", MonitorDot, ["monitoring"]),
++          s("grafana", "Managed Grafana", "Monitoring & Observability", PieChart, ["monitoring"]),
++          s("nic-obs", "Network Intelligence Center", "Monitoring & Observability", Eye, ["monitoring"]),
++        ],
++      },
++      {
++        name: "DevOps & Developer Tools",
++        services: [
++          s("cloudbuild", "Cloud Build", "DevOps & Developer Tools", GitBranch, ["compute"]),
++          s("clouddeploy", "Cloud Deploy", "DevOps & Developer Tools", Wrench, ["compute"]),
++          s("cloudcode", "Cloud Code", "DevOps & Developer Tools", Terminal, ["compute"]),
++          s("cloudshell", "Cloud Shell", "DevOps & Developer Tools", Terminal, ["compute"]),
++          s("gcloud-cli", "Google Cloud CLI", "DevOps & Developer Tools", Terminal, ["compute"]),
++          s("artifactregistry-dev", "Artifact Registry", "DevOps & Developer Tools", Package, ["container"]),
++          s("inframanager", "Infrastructure Manager", "DevOps & Developer Tools", Cog, ["compute"]),
++          s("cloudworkstations", "Cloud Workstations", "DevOps & Developer Tools", MonitorDot, ["compute"]),
++          s("gemini-codeassist", "Gemini Code Assist", "DevOps & Developer Tools", Sparkles, ["compute"]),
++          s("sourcerepo", "Source Repositories", "DevOps & Developer Tools", GitBranch, ["compute"]),
+         ],
+       },
+       {
+@@ -339,12 +1045,28 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
+         services: [
+           s("users", "Users", "Clients", Users, ["client"]),
+           s("mobile", "Mobile App", "Clients", Signal, ["client"]),
++          s("browser", "Web Browser", "Clients", Globe, ["client"]),
++          s("iot", "IoT Device", "Clients", Podcast, ["client"]),
+         ],
+       },
+     ],
+   },
+ };
+ 
++// Ensure every service has an `iconUrl` (fallback to a generic AWS/Cloud logo).
++const AWS_ICON = "/icons/aws.svg";
++const AZURE_ICON = "/icons/azure.svg";
++const GCP_ICON = "/icons/gcp.svg";
++
++for (const c of Object.values(CLOUDS)) {
++  const defaultIcon = c.id === "aws" ? AWS_ICON : c.id === "azure" ? AZURE_ICON : GCP_ICON;
++  for (const cat of c.categories) {
++    for (const svc of cat.services) {
++      if (!svc.iconUrl) svc.iconUrl = defaultIcon;
++    }
++  }
++}
++
+ export function findService(cloud: CloudId, serviceId: string): ServiceDef | undefined {
+   for (const cat of CLOUDS[cloud].categories) {
+     const hit = cat.services.find((svc) => svc.id === serviceId);

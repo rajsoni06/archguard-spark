@@ -27,7 +27,18 @@ const write = (key: string, value: unknown) => {
   }
 };
 
-export const loadContext = () => read<ProjectContext>(CTX_KEY);
+/** Back-fill defaults for new fields added after initial release. */
+const migrateContext = (ctx: ProjectContext | null): ProjectContext | null => {
+  if (!ctx) return null;
+  // Use Object.assign to avoid duplicate-key TS error with exactOptionalPropertyTypes
+  return Object.assign(
+    { traffic: "10K RPS", availability: "99.9%", consistency: "Strong", latency: "<100ms" },
+    ctx,
+  ) as ProjectContext;
+};
+
+export const loadContext = () => migrateContext(read<ProjectContext>(CTX_KEY));
+
 export const saveContext = (ctx: ProjectContext) => write(CTX_KEY, ctx);
 export const loadGraph = () => read<StoredGraph>(GRAPH_KEY);
 export const saveGraph = (graph: StoredGraph) => write(GRAPH_KEY, graph);

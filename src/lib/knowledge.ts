@@ -481,8 +481,492 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
       ]),
     ],
   },
+  // ────────────────────────────────────────────────────────────────
+  // Database Decisions
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "databases",
+    name: "Database Decisions",
+    description: "Choosing the right database — and knowing when your choice creates problems.",
+    topics: ["SQL vs NoSQL", "CAP Theorem", "Sharding", "Partitioning", "Indexing", "ACID", "Consistency Models"],
+    articles: [
+      a("sql-vs-nosql", "SQL vs NoSQL", "Two different tools — not competitors.", 6, [
+        {
+          heading: "SQL databases",
+          body: [
+            "Relational databases enforce a schema, support ACID transactions, and allow complex multi-table joins.",
+            "Use SQL for: user accounts, orders, payments, inventory — any domain with structured relationships and strong consistency requirements.",
+          ],
+        },
+        {
+          heading: "NoSQL databases",
+          body: [
+            "Document, key-value, wide-column and graph databases trade relational expressiveness for horizontal scalability and flexible schemas.",
+            "Use NoSQL for: session data, product catalogs with variable attributes, social graphs, real-time analytics counters, and access patterns that are simple and predictable.",
+          ],
+        },
+        {
+          heading: "When to choose each",
+          body: [
+            "SQL if: you need multi-entity ACID transactions, ad-hoc reporting queries, or the schema is well-understood and stable.",
+            "NoSQL if: you need horizontal write scaling, the access patterns are known and simple (key lookups, range scans), or the schema is highly variable.",
+          ],
+        },
+        {
+          heading: "The bad choice to avoid",
+          body: [
+            "Choosing NoSQL because it sounds more scalable, then discovering you need joins. Rewriting a SQL workload into a NoSQL schema that needs joins is painful.",
+          ],
+        },
+      ]),
+      a("cap-theorem", "CAP Theorem & Consistency Models", "Why distributed systems can't have everything.", 5, [
+        {
+          heading: "The theorem",
+          body: [
+            "A distributed system can guarantee at most two of: Consistency (every read sees the latest write), Availability (every request gets a response), and Partition Tolerance (the system works despite network splits).",
+            "Since network partitions are inevitable in production, you always choose between CP (consistent but may reject requests) and AP (available but may return stale data).",
+          ],
+        },
+        {
+          heading: "In practice",
+          body: [
+            "Strong consistency: all reads reflect the latest write. Required for payments, financial ledgers, inventory decrement.",
+            "Eventual consistency: reads may be slightly stale but the system always responds. Acceptable for social feeds, product views, analytics.",
+          ],
+        },
+        {
+          heading: "PACELC extension",
+          body: [
+            "Even without a partition, there is a trade-off: lower latency or stronger consistency. This is why DynamoDB offers configurable read consistency.",
+          ],
+        },
+      ]),
+      a("sharding", "Sharding & Partitioning", "Splitting data to scale writes beyond one machine.", 6, [
+        {
+          heading: "What it is",
+          body: [
+            "Sharding splits a database horizontally — each shard holds a subset of the data. Partitioning is the same concept at the table level within one node.",
+          ],
+        },
+        {
+          heading: "Partition key choice",
+          body: [
+            "A good partition key distributes writes evenly. A bad one (e.g. user country for a US-centric app) creates hot partitions that re-introduce the bottleneck.",
+            "Hash-based sharding distributes evenly but makes range queries require scatter-gather across all shards.",
+          ],
+        },
+        {
+          heading: "When to shard",
+          body: [
+            "Shard only when a single-node primary cannot handle write throughput after you have: exhausted vertical scaling, applied indexing, and used read replicas.",
+            "Sharding adds enormous operational complexity. Consider managed alternatives (Spanner, CockroachDB, Aurora Limitless) first.",
+          ],
+        },
+      ]),
+      a("indexing", "Database Indexing", "The single most impactful performance optimization you can make.", 4, [
+        {
+          heading: "What an index does",
+          body: [
+            "An index is a data structure that maps column values to row locations, so the engine can find rows without scanning the entire table.",
+            "Without an index, a SELECT with a WHERE clause performs a full table scan — O(n) per query.",
+          ],
+        },
+        {
+          heading: "EXPLAIN ANALYZE",
+          body: [
+            "Run EXPLAIN ANALYZE on slow queries to see whether the planner uses an index or a sequential scan.",
+            "Add indexes on columns that appear in WHERE, JOIN ON, and ORDER BY clauses, weighted by query frequency.",
+          ],
+        },
+        {
+          heading: "Trade-offs",
+          body: [
+            "Each index speeds up reads but slows down inserts, updates and deletes (the index must be updated too).",
+            "Don't index every column — index the columns your slowest, most frequent queries filter on.",
+          ],
+        },
+      ]),
+    ],
+  },
+  // ────────────────────────────────────────────────────────────────
+  // Distributed Systems
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "distributed-systems",
+    name: "Distributed Systems",
+    description: "The patterns that keep services alive when things inevitably go wrong.",
+    topics: ["Sync vs Async", "Idempotency", "Dead-Letter Queue", "Circuit Breaker", "Rate Limiting", "Backpressure"],
+    articles: [
+      a("sync-vs-async", "Synchronous vs Asynchronous Architecture", "The most important architectural decision in a distributed system.", 6, [
+        {
+          heading: "Synchronous (request-response)",
+          body: [
+            "The caller blocks until the callee responds. Simple to reason about, easy to propagate errors.",
+            "Risk: if the downstream service is slow, latency compounds across the entire call chain. One slow service can stall every upstream caller.",
+          ],
+        },
+        {
+          heading: "Asynchronous (message-driven)",
+          body: [
+            "The caller enqueues a message and returns immediately. The worker processes it independently.",
+            "Benefits: isolates failures, flattens traffic spikes, enables independent scaling and retries.",
+          ],
+        },
+        {
+          heading: "When to use which",
+          body: [
+            "Synchronous: user-facing reads that require a real-time response (e.g. auth check, product page, search).",
+            "Asynchronous: anything that does not need an immediate result — email delivery, report generation, payment processing, notifications.",
+          ],
+        },
+        {
+          heading: "Hybrid",
+          body: [
+            "Most production systems are hybrid: synchronous for the user-facing response, asynchronous for the side effects triggered by that response.",
+          ],
+        },
+      ]),
+      a("idempotency", "Idempotency & At-Least-Once Delivery", "Why you must design for duplicate messages.", 4, [
+        {
+          heading: "The problem",
+          body: [
+            "Every message queue and async system guarantees at-least-once delivery. This means your consumer may process the same message more than once.",
+            "A non-idempotent consumer (one that charges a card on every execution) will over-charge users on retries.",
+          ],
+        },
+        {
+          heading: "The solution",
+          body: [
+            "Make every consumer idempotent by tracking a message ID in a deduplication table. If the ID already exists, skip processing.",
+            "This is especially critical for payment, order and inventory operations.",
+          ],
+        },
+      ]),
+      a("dead-letter-queue", "Dead-Letter Queue (DLQ)", "What happens to messages that always fail.", 4, [
+        {
+          heading: "What it is",
+          body: [
+            "A DLQ is a separate queue where messages land after they have failed the maximum number of retries.",
+            "Without a DLQ, poison messages loop forever, consuming worker capacity and blocking other messages.",
+          ],
+        },
+        {
+          heading: "What to do with DLQ messages",
+          body: [
+            "Alert on DLQ depth in your monitoring system — it means your consumer has a bug or the message is malformed.",
+            "Inspect, fix the bug, and replay from the DLQ once the consumer is correct.",
+          ],
+        },
+        {
+          heading: "Configuration",
+          body: [
+            "Set a max receive count (typically 3–5 retries) after which messages move to the DLQ automatically.",
+            "Set a visibility timeout long enough for your consumer to finish processing before the message becomes visible again.",
+          ],
+        },
+      ]),
+      a("rate-limiting-pattern", "Rate Limiting & Throttling", "Protecting your API from abuse and accidental overload.", 4, [
+        {
+          heading: "Why it matters",
+          body: [
+            "Without rate limiting, a single buggy client or malicious actor can exhaust your compute, database or downstream API quota.",
+            "Rate limiting is a first-class reliability and security control, not an afterthought.",
+          ],
+        },
+        {
+          heading: "Algorithms",
+          body: [
+            "Token bucket: allows bursts up to the bucket size. Good for user-facing APIs.",
+            "Sliding window: smoother than fixed window, prevents boundary-edge abuse.",
+            "Fixed window: simplest but allows 2× burst at window boundaries.",
+          ],
+        },
+        {
+          heading: "Implementation",
+          body: [
+            "Implement at the API Gateway or WAF layer for shared limits. Use Redis with atomic INCR + EXPIRE for distributed per-user counters.",
+          ],
+        },
+      ]),
+    ],
+  },
+  // ────────────────────────────────────────────────────────────────
+  // Architecture Templates
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "templates",
+    name: "Architecture Templates",
+    description: "Real-world patterns used in production systems — study the why, not just the what.",
+    topics: ["E-Commerce", "URL Shortener", "Chat Application", "Video Streaming", "Notification System"],
+    articles: [
+      a("template-ecommerce", "E-Commerce Architecture", "The canonical multi-tier production pattern.", 7, [
+        {
+          heading: "Request flow",
+          body: [
+            "Users → CloudFront (CDN) → WAF → Application Load Balancer → API Gateway → Microservices.",
+            "CloudFront serves static assets and cacheable product pages. WAF blocks OWASP attacks before they reach the origin.",
+          ],
+        },
+        {
+          heading: "Data layer",
+          body: [
+            "PostgreSQL (RDS/Aurora) for orders, users, inventory — ACID required.",
+            "Redis (ElastiCache) for sessions, product page caches, rate limiting counters.",
+            "DynamoDB / Firestore for product catalog with variable attributes.",
+            "S3 for product images, receipts, exports.",
+          ],
+        },
+        {
+          heading: "Async layer",
+          body: [
+            "Order placed → SQS → Order Worker → Payment Service (synchronous call with circuit breaker) → SNS → Email/SMS.",
+            "Async processing prevents the checkout response from waiting for email delivery.",
+          ],
+        },
+        {
+          heading: "Key design decisions",
+          body: [
+            "Inventory decrement: synchronous with optimistic locking to prevent oversell.",
+            "Cart: Redis with TTL — acceptably lost if Redis restarts.",
+            "Payment: synchronous, idempotent, with retry + circuit breaker on the payment provider.",
+          ],
+        },
+      ]),
+      a("template-url-shortener", "URL Shortener Architecture", "A classic system design interview problem.", 6, [
+        {
+          heading: "Requirements analysis",
+          body: [
+            "Write: 100 URLs/sec. Read: 10,000 redirects/sec (100:1 read:write ratio). Availability: 99.99%. Latency: <10ms redirect.",
+          ],
+        },
+        {
+          heading: "Core design",
+          body: [
+            "Write path: API → ID generator (Base62 encode of distributed counter or hash) → DynamoDB (shortCode → originalURL).",
+            "Read path: API → Redis cache (shortCode → originalURL, TTL 24h) → DynamoDB on cache miss → 301 redirect.",
+          ],
+        },
+        {
+          heading: "Why Redis is critical here",
+          body: [
+            "With 10,000 RPS and <10ms target, hitting DynamoDB on every redirect would saturate the table and add 5–10ms per request.",
+            "Redis serves the 90%+ cache-hit rate in <1ms.",
+          ],
+        },
+        {
+          heading: "Scale considerations",
+          body: [
+            "Stateless API tier auto-scales behind an ALB.",
+            "DynamoDB scales horizontally — partition key is the short code (evenly distributed after Base62 encoding).",
+          ],
+        },
+      ]),
+      a("template-chat", "Real-Time Chat Architecture", "WebSockets, fan-out, and message persistence.", 7, [
+        {
+          heading: "Core challenge",
+          body: [
+            "HTTP is request-response — the client must poll. WebSockets give a persistent bidirectional channel, enabling true push.",
+          ],
+        },
+        {
+          heading: "Architecture",
+          body: [
+            "Client → Load Balancer (NLB for WebSocket stickiness) → Chat Service (stateful WebSocket handler) → Pub/Sub (Redis or SNS) → Recipient Chat Service → Client.",
+            "Each chat server subscribes to a channel per user. When a message arrives, it publishes to the channel, and every server subscribed for that user pushes the message.",
+          ],
+        },
+        {
+          heading: "Message persistence",
+          body: [
+            "Messages stored in Cassandra or DynamoDB — wide-column databases are ideal for time-series chat history: (conversation_id, timestamp) as the key.",
+            "Recent messages (last 100) cached in Redis for fast load.",
+          ],
+        },
+        {
+          heading: "Presence",
+          body: [
+            "Heartbeat every 30s updates a Redis key with TTL 60s. If the key expires, the user is offline.",
+          ],
+        },
+      ]),
+      a("template-notification", "Notification System Architecture", "Fan-out to millions with reliability.", 5, [
+        {
+          heading: "Pattern",
+          body: [
+            "Application → Message Queue (SQS/Pub/Sub) → Notification Workers (one per channel: email, SMS, push).",
+            "Decoupling via queue means the main application is never blocked by slow email/SMS delivery.",
+          ],
+        },
+        {
+          heading: "Reliability",
+          body: [
+            "Retry with exponential backoff on transient failures (network, provider timeout).",
+            "Dead-letter queue for permanently-failed messages — these are inspected and replayed after fixing the root cause.",
+            "Idempotency key per notification prevents duplicate sends on retry.",
+          ],
+        },
+        {
+          heading: "Scale",
+          body: [
+            "For fan-out to millions (e.g. broadcast), use a fan-out pattern: one SNS topic → multiple SQS queues → multiple worker pools in parallel.",
+          ],
+        },
+      ]),
+    ],
+  },
+  // ────────────────────────────────────────────────────────────────
+  // Architecture Comparisons
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "comparisons",
+    name: "Architecture Comparisons",
+    description: "Side-by-side analysis of the most commonly confused technology choices.",
+    topics: ["Load Balancer vs API Gateway", "Kafka vs SQS", "SQL vs NoSQL", "EC2 vs Lambda vs ECS", "Redis vs Memcached"],
+    articles: [
+      a("alb-vs-apigw", "Load Balancer vs API Gateway", "Two traffic controllers with very different purposes.", 5, [
+        {
+          heading: "Load Balancer",
+          body: [
+            "Operates at Layer 4 (TCP/UDP) or Layer 7 (HTTP). Distributes traffic across healthy instances based on health checks.",
+            "Does NOT understand: authentication, API versioning, request transformation, throttling, or response aggregation.",
+            "Use when: you have multiple instances of the same service and need even traffic distribution.",
+          ],
+        },
+        {
+          heading: "API Gateway",
+          body: [
+            "Operates at Layer 7. Adds: authentication enforcement, rate limiting, request routing by path/method, transformation, and response caching.",
+            "Does NOT replace a load balancer — typically sits in front of one or directly in front of a single service.",
+            "Use when: you have multiple downstream services and need a governed, observable entry point.",
+          ],
+        },
+        {
+          heading: "Combined pattern",
+          body: [
+            "Client → API Gateway (auth, routing, throttle) → ALB (distribute) → Service Instances.",
+            "At small scale: Client → API Gateway → single service. No ALB needed until you have multiple instances.",
+          ],
+        },
+      ]),
+      a("kafka-vs-sqs", "Kafka vs SQS / Cloud Pub-Sub", "High-throughput streaming vs managed simple queues.", 5, [
+        {
+          heading: "When to use Kafka",
+          body: [
+            "You need message replay (consumers can re-read past events). You need strict ordering within a partition. You need very high throughput (millions of events/sec). You are building event sourcing or CQRS.",
+            "Cost: high operational complexity, requires schema management, expertise required.",
+          ],
+        },
+        {
+          heading: "When to use SQS / Cloud Tasks / Service Bus",
+          body: [
+            "You need reliable task queuing. You do not need replay. Order is not critical (or FIFO queues satisfy you). Your team is small or operational simplicity is a priority.",
+            "Cost: near zero operational overhead — fully managed, scales automatically.",
+          ],
+        },
+        {
+          heading: "The mistake",
+          body: [
+            "Choosing Kafka because it sounds more scalable, then spending 3 months tuning it for a workload that SQS would have handled in 1 day.",
+          ],
+        },
+      ]),
+      a("ec2-vs-lambda-vs-ecs", "EC2 vs Lambda vs ECS vs EKS", "Picking the right compute for your workload.", 6, [
+        {
+          heading: "EC2",
+          body: ["Full control. You manage the OS, patching, scaling. Best for: legacy apps, GPU workloads, custom OS requirements, predictable steady traffic with reserved instances."],
+        },
+        {
+          heading: "Lambda / Cloud Functions",
+          body: ["Zero infrastructure. Pay per invocation. Best for: event-driven handlers, lightweight APIs, scheduled jobs, sporadic workloads. Worst for: high CPU tasks, cold-start-sensitive paths."],
+        },
+        {
+          heading: "ECS Fargate / Cloud Run / Container Apps",
+          body: ["Containers without a cluster to manage. Best for: containerized workloads where you want Kubernetes-style isolation without the control plane complexity. The default choice for most new microservices."],
+        },
+        {
+          heading: "EKS / GKE / AKS (Kubernetes)",
+          body: ["Full container orchestration for large fleets. Best for: large engineering organizations (10+ services, multiple teams), complex scheduling requirements. Worst for: small teams — the operational overhead is significant."],
+        },
+      ]),
+    ],
+  },
+  // ────────────────────────────────────────────────────────────────
+  // Capacity Planning
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "capacity",
+    name: "Capacity Planning",
+    description: "Estimating load before you build — the first step of every real system design interview.",
+    topics: ["RPS Estimation", "Storage Estimation", "Bandwidth", "Database Sizing", "Back-of-Envelope"],
+    articles: [
+      a("back-of-envelope", "Back-of-Envelope Estimation", "The skill interviewers use to separate engineers who understand scale.", 6, [
+        {
+          heading: "Why it matters",
+          body: [
+            "Before choosing a technology, estimate the numbers. A system handling 100 RPS needs completely different architecture than one handling 1M RPS.",
+            "Back-of-envelope calculations give you a defensible basis for every architectural decision.",
+          ],
+        },
+        {
+          heading: "Key numbers to memorize",
+          body: [
+            "1 million seconds ≈ 11.5 days. 1 billion seconds ≈ 31.7 years.",
+            "Typical RPS: 1K users * 10 requests/day / 86,400 sec = ~0.1 RPS. Scale up linearly.",
+            "Peak traffic is typically 2–3× average. Design for peak.",
+            "P99 latency is what users experience — not average.",
+          ],
+        },
+        {
+          heading: "RPS to instance count",
+          body: [
+            "A typical web API instance handles 1,000–5,000 RPS depending on work per request.",
+            "At 100,000 RPS: 20–100 instances behind a load balancer with auto scaling.",
+            "At 1M RPS: serverless or a large cluster with careful profiling.",
+          ],
+        },
+        {
+          heading: "Storage estimation",
+          body: [
+            "Users × average record size × years of retention = total storage.",
+            "Example: 10M users × 1 KB profile = 10 GB. Trivial. Add 100 posts × 1 KB = 10 TB — needs partitioning.",
+          ],
+        },
+        {
+          heading: "Database sizing",
+          body: [
+            "A single PostgreSQL primary can handle ~10K–50K simple reads/sec and ~5K–20K writes/sec depending on hardware.",
+            "Above these limits: add read replicas for reads, and consider sharding or a distributed database for writes.",
+          ],
+        },
+      ]),
+      a("performance-budgets", "Latency Budgets & SLOs", "Designing to a number, not to a feeling.", 4, [
+        {
+          heading: "SLO vs SLA",
+          body: [
+            "SLO (Service Level Objective): internal target — 'p99 API latency < 100ms'.",
+            "SLA (Service Level Agreement): external contractual commitment — 'we guarantee 99.9% uptime'.",
+            "Operate to a tighter SLO than your SLA to have room to absorb incidents without breaching the contract.",
+          ],
+        },
+        {
+          heading: "Latency budget",
+          body: [
+            "A latency budget allocates the allowed time across each tier. Example for a 100ms SLO: CDN 5ms + LB 2ms + API 30ms + Cache hit 5ms / DB 40ms + response 18ms.",
+            "If the DB takes 80ms, the budget is broken — you either need to add a cache, optimize the query, or loosen the SLO.",
+          ],
+        },
+        {
+          heading: "Availability maths",
+          body: [
+            "99% = 87.6 hours downtime/year. 99.9% = 8.7 hours. 99.99% = 52 minutes. 99.999% = 5 minutes.",
+            "Multiple dependencies multiply downtime: two 99.9% services in series = 99.8% availability (1 - (0.001 + 0.001)).",
+          ],
+        },
+      ]),
+    ],
+  },
 ];
 
 export const ALL_ARTICLES: Article[] = KNOWLEDGE.flatMap((c) => c.articles);
 
-export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);
+export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);

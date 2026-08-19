@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Layers, Search } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, Layers, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BOUNDARY_KINDS, CLOUDS, type CloudId, type ServiceDef } from "@/lib/catalog";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ interface Props {
 
 export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
   const [query, setQuery] = useState("");
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const def = CLOUDS[cloud];
 
   const categories = useMemo(() => {
@@ -55,69 +56,98 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
           collapsed ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
-        <span className="text-[13px] font-semibold">Component Library</span>
-        <button
-          onClick={onToggle}
-          aria-label="Collapse component library"
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-      </div>
-
-      <div className="border-b border-border p-2.5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${def.short} services...`}
-            className="h-8 pl-8 text-xs"
-          />
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
+          <span className="text-[13px] font-semibold">Component Library</span>
+          <button
+            onClick={onToggle}
+            aria-label="Collapse component library"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
-        <Section title="Boundaries" icon>
-          <div className="grid gap-1">
-            {BOUNDARY_KINDS.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                title={`Click to add ${b.label}`}
-                onClick={() => onAdd({ kind: "boundary", id: b.id, label: b.label })}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(
-                    "application/archguard",
-                    JSON.stringify({ kind: "boundary", id: b.id, label: b.label }),
-                  );
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                className="flex w-full cursor-grab items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
-              >
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: b.color }} />
-                {b.label}
-              </button>
-            ))}
+        <div className="border-b border-border p-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${def.short} services...`}
+              className="h-8 pl-8 text-xs"
+            />
           </div>
-        </Section>
+        </div>
 
-        {categories.map((cat) => (
-          <Section key={cat.name} title={cat.name}>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+          <Section title="Boundaries" icon>
             <div className="grid gap-1">
-              {cat.services.map((svc) => (
-                <ServiceCard key={svc.id} svc={svc} cloud={cloud} onAdd={onAdd} />
-              ))}
+              {BOUNDARY_KINDS.map((b) => {
+                const Icon = b.icon;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    title={`Click to add ${b.label}`}
+                    onClick={() => onAdd({ kind: "boundary", id: b.id, label: b.label })}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        "application/archguard",
+                        JSON.stringify({ kind: "boundary", id: b.id, label: b.label }),
+                      );
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    className="group flex w-full cursor-grab items-center justify-between gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: b.color }} />
+                      <span className="truncate">{b.label}</span>
+                    </div>
+                    <Icon 
+                      className="size-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" 
+                      style={{ color: b.color }}
+                    />
+                  </button>
+                );
+              })}
             </div>
           </Section>
-        ))}
 
-        {categories.length === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-muted-foreground">No services match.</p>
-        ) : null}
-      </div>
+          {categories.map((cat) => {
+            const isExpanded = !!expandedCats[cat.name];
+            const preview = cat.services.slice(0, 8);
+            const hasMore = cat.services.length > preview.length;
+            const shown = isExpanded ? cat.services : preview;
+            return (
+              <Section key={cat.name} title={cat.name}>
+                <div className="grid gap-1">
+                  {shown.map((svc) => (
+                    <ServiceCard key={svc.id} svc={svc} cloud={cloud} onAdd={onAdd} />
+                  ))}
+                </div>
+                {hasMore ? (
+                  <div className="mt-2 px-1">
+                    <button
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => setExpandedCats((s) => ({ ...s, [cat.name]: !isExpanded }))}
+                    >
+                      {isExpanded
+                        ? "Show fewer services"
+                        : `More services (${cat.services.length - preview.length})`}
+                    </button>
+                  </div>
+                ) : null}
+              </Section>
+            );
+          })}
+
+          {categories.length === 0 ? (
+            <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+              No services match.
+            </p>
+          ) : null}
+        </div>
       </div>
     </aside>
   );
@@ -175,7 +205,11 @@ function ServiceCard({
         className="flex size-5 items-center justify-center rounded"
         style={{ backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)`, color }}
       >
-        <Icon className="size-3" />
+        {svc.iconUrl ? (
+          <img src={svc.iconUrl} alt={svc.name} className="size-3 object-contain" />
+        ) : (
+          <Icon className="size-3" />
+        )}
       </span>
       <span className="truncate">{svc.name}</span>
     </button>

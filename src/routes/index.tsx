@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import * as React from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -14,8 +15,12 @@ import {
   Sparkles,
   Users,
   Workflow,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
+import AuthDialog from "@/components/ui/auth-modal";
 
 const TITLE = "ArchGuard AI — Design Better. Build Safer. Scale Smarter.";
 const DESCRIPTION =
@@ -83,7 +88,11 @@ const FLOW = [
 ];
 
 function Landing() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const year = new Date().getFullYear();
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const [authMode, setAuthMode] = React.useState<"login" | "signup">("login");
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background text-foreground">
@@ -97,54 +106,70 @@ function Landing() {
         }}
       />
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
+      <header className="relative z-30 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/30">
-            <ShieldCheck className="size-5" />
-          </div>
+          <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-12 w-auto object-contain" />
           <span className="truncate text-base font-semibold tracking-tight">ArchGuard AI</span>
         </div>
         <nav className="flex shrink-0 items-center gap-2 text-sm">
-          <Link
-            to="/knowledge"
-            className="hidden rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground sm:block"
+          <button
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            className="hidden rounded-lg px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/30 sm:flex items-center justify-center"
           >
-            Knowledge Hub
-          </Link>
+            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           {user ? (
-            <Link
-              to="/dashboard"
-              className="rounded-lg border border-border bg-card/70 px-3.5 py-2 font-medium backdrop-blur transition-colors hover:bg-accent"
-            >
-              Dashboard
-            </Link>
-          ) : (
             <>
               <Link
-                to="/login"
-                className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Login
-              </Link>
-              <Link
-                to="/signup"
+                to="/dashboard"
                 className="rounded-lg border border-border bg-card/70 px-3.5 py-2 font-medium backdrop-blur transition-colors hover:bg-accent"
               >
-                Sign Up
+                Dashboard
               </Link>
+              <div className="flex items-center gap-2">
+                <div className="hidden text-sm text-muted-foreground sm:block">{user.name}</div>
+                <button
+                  onClick={() => logout()}
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent/20 transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthOpen(true);
+                }}
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-accent/20 transition-colors"
+              >
+                Login
+              </button>
+              <button
+                onClick={() => {
+                  setAuthMode("signup");
+                  setAuthOpen(true);
+                }}
+                className="cursor-pointer rounded-lg px-3.5 py-2 font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 shadow-sm hover:bg-indigo-100 transition-colors"
+              >
+                Sign Up
+              </button>
             </>
           )}
         </nav>
       </header>
 
       <main className="relative z-10">
-        <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-16">
+        <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-0 -mt-2 lg:-mt-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-0">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-[12px] font-medium text-muted-foreground backdrop-blur">
               <Sparkles className="size-3.5 text-primary" />
               Rule engine decides. AI explains.
             </span>
-            <h1 className="mt-5 text-4xl font-semibold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
               Design Better.
               <br />
               <span
@@ -187,9 +212,14 @@ function Landing() {
                 ["3", "Cloud providers"],
                 ["100%", "Deterministic scoring"],
               ].map(([v, k]) => (
-                <div key={k} className="rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
+                <div
+                  key={k}
+                  className="rounded-xl border border-border bg-card/50 p-3 backdrop-blur"
+                >
                   <dt className="text-lg font-semibold tracking-tight">{v}</dt>
-                  <dd className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">{k}</dd>
+                  <dd className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {k}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -243,16 +273,53 @@ function Landing() {
         </section>
       </main>
 
-      <footer className="relative z-10 border-t border-border py-6 text-center text-xs text-muted-foreground">
-        ArchGuard AI — Intelligent Architecture Design &amp; Security Review Platform
+      <footer className="relative z-10 border-t border-border pt-6 pb-12 text-center text-sm text-gray-900 dark-footer">
+        <div className="mx-auto max-w-6xl px-5">
+          <div className="text-base font-medium text-gray-900">
+            Made with ❤️ in India by{" "}
+            <a
+              href="https://www.linkedin.com/in/riya-saini-5096b9236/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 hover:underline hover:underline-offset-2"
+            >
+              Riya Saini
+            </a>
+            ,{" "}
+            <a
+              href="https://www.linkedin.com/in/raj-anand-soni-037541212"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 hover:underline hover:underline-offset-2"
+            >
+              Raj Anand Soni
+            </a>
+            ,{" "}
+            <a
+              href="https://www.linkedin.com/in/praffulgoyl/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 hover:underline hover:underline-offset-2"
+            >
+              Prafful Goyal
+            </a>
+          </div>
+          <div className="mt-1 text-gray-800">
+            ArchGuard AI — Intelligent Architecture Design &amp; Security Review Platform
+          </div>
+          <div className="mt-4 text-[13px] text-gray-700">
+            © {year} ArchGuard AI. All rights reserved.
+          </div>
+        </div>
       </footer>
+      <AuthDialog open={authOpen} mode={authMode} onOpenChange={(v) => setAuthOpen(v)} />
     </div>
   );
 }
 
 function FlowVisual() {
   return (
-    <div className="relative">
+    <div className="relative mx-auto w-full max-w-[340px] pt-10 lg:max-w-[380px] lg:pt-16">
       <div
         aria-hidden
         className="absolute -inset-6 rounded-[36px] opacity-60 blur-2xl"

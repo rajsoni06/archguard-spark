@@ -5,6 +5,7 @@ import {
   FolderKanban,
   History,
   LayoutDashboard,
+  Home,
   LayoutTemplate,
   Moon,
   Settings,
@@ -16,10 +17,12 @@ import {
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 
 const NAV = [
+  { to: "/", label: "Home", icon: Home },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/", label: "Architecture Designer", icon: Workflow },
+  { to: "/designer", label: "Architecture Designer", icon: Workflow },
   { to: "/projects", label: "My Projects", icon: FolderKanban },
   { to: "/history", label: "Review History", icon: History },
   { to: "/knowledge", label: "Knowledge Hub", icon: BookOpen },
@@ -37,8 +40,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <aside className="hidden w-[236px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <div className="flex size-8 items-center justify-center rounded-md bg-primary/15 text-primary ring-1 ring-primary/30">
-            <ShieldCheck className="size-4.5" />
+          <div className="flex shrink-0 items-center justify-center">
+            <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-9 w-auto object-contain" />
           </div>
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-tight">ArchGuard AI</div>
@@ -88,7 +91,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <AuthStatus />
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function AuthStatus() {
+  const { user, logout } = useAuth();
+  if (!user) return null;
+  return (
+    <div className="flex items-center justify-end gap-3 border-b border-border px-4 py-2">
+      <div className="flex items-center gap-3">
+        <div className="text-sm font-medium truncate">{user.name}</div>
+        <button
+          onClick={() => logout()}
+          className="rounded-md px-3 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          Logout
+        </button>
+      </div>
     </div>
   );
 }

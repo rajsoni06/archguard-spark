@@ -47,6 +47,9 @@ export function ReviewPanel({
   onRun,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("analysis");
+  const tabScroll = useRef<Record<string, number>>({});
   const [dragging, setDragging] = useState(false);
   const isEmpty = nodeCount === 0;
 
@@ -76,7 +79,7 @@ export function ReviewPanel({
       ref={asideRef}
       style={{ width: collapsed ? 36 : width }}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface",
+        "relative flex shrink-0 flex-col border-l border-border bg-surface",
         dragging ? "transition-none" : "transition-[width] duration-300 ease-out",
       )}
     >
@@ -86,10 +89,10 @@ export function ReviewPanel({
           aria-orientation="vertical"
           aria-label="Resize review panel"
           onMouseDown={startResize}
-          onDoubleClick={() => onResize(360)}
-          className="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-col-resize items-center justify-center hover:bg-primary/10"
+          onDoubleClick={() => onResize(340)}
+          className="group absolute inset-y-0 left-0 z-50 flex w-[4px] cursor-col-resize items-center justify-center hover:bg-neutral-200/60 dark:hover:bg-neutral-700/40"
         >
-          <GripVertical className="size-3 text-muted-foreground/60 transition-colors group-hover:text-primary" />
+          <GripVertical className="size-2 text-neutral-400 transition-colors group-hover:text-neutral-500 group-active:text-neutral-600" />
         </div>
       ) : null}
 
@@ -106,13 +109,13 @@ export function ReviewPanel({
       </button>
 
       <div
-        style={{ width: collapsed ? 330 : width, minWidth: collapsed ? 330 : width }}
+        style={{ width: collapsed ? 290 : width, minWidth: collapsed ? 290 : width }}
         className={cn(
-          "flex h-full flex-col transition-opacity duration-200",
+          "flex h-full flex-col overflow-hidden transition-opacity duration-200",
           collapsed ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
-        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+        <div className="flex items-center justify-between border-b border-border pl-3 pr-3 py-2.5">
           <span className="text-sm font-semibold">Architecture Review</span>
           <button
             onClick={onToggle}
@@ -124,81 +127,123 @@ export function ReviewPanel({
         </div>
 
         {!result ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
             <div className="rounded-xl border border-border bg-card p-5">
               <div className="text-sm font-semibold">Review your architecture</div>
               <p className="mt-2 text-[13px] leading-relaxed text-foreground/75">
                 Design your architecture, then run the deterministic rule engine to get category
                 scores, strengths and violations.
               </p>
-              <Button className="mt-4 h-11 w-full text-sm" onClick={onRun}>
+              <Button className="mt-4 h-9 w-full text-sm" onClick={onRun}>
                 <Sparkles className="size-4" /> Review Architecture
               </Button>
             </div>
             <CostCard cost={cost} ctx={ctx} />
           </div>
         ) : (
-          <Tabs defaultValue="analysis" className="flex min-h-0 flex-1 flex-col gap-0">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              // save current scroll position for the previous tab
+              if (scrollContainerRef.current) {
+                tabScroll.current[activeTab] = scrollContainerRef.current.scrollTop;
+              }
+              setActiveTab(v);
+              // restore saved position (or scroll to top) for the new tab
+              setTimeout(() => {
+                if (!scrollContainerRef.current) return;
+                const pos = tabScroll.current[v] ?? 0;
+                scrollContainerRef.current.scrollTop = pos;
+              }, 0);
+            }}
+            className="flex min-h-0 flex-1 flex-col gap-0"
+          >
             <TabsList className="m-2.5 grid grid-cols-5">
-              <TabsTrigger value="analysis" className="text-[11px]">Analysis</TabsTrigger>
-              <TabsTrigger value="score" className="text-[11px]">Score</TabsTrigger>
-              <TabsTrigger value="cost" className="text-[11px]">Cost</TabsTrigger>
-              <TabsTrigger value="suggestions" className="text-[11px]">Fixes</TabsTrigger>
-              <TabsTrigger value="ai" className="text-[11px]">AI</TabsTrigger>
+              <TabsTrigger value="analysis" className="text-[11px]">
+                Analysis
+              </TabsTrigger>
+              <TabsTrigger value="score" className="text-[11px]">
+                Score
+              </TabsTrigger>
+              <TabsTrigger value="cost" className="text-[11px]">
+                Cost
+              </TabsTrigger>
+              <TabsTrigger value="suggestions" className="text-[11px]">
+                Fixes
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="text-[11px]">
+                AI
+              </TabsTrigger>
             </TabsList>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
               <TabsContent value="analysis" className="mt-0 space-y-4">
                 {isEmpty ? (
                   <EmptyArchitecture onFocusLibrary={onFocusLibrary} />
                 ) : (
                   <>
-                <Group title={`Detected strengths (${result.strengths.length})`}>
-                  {result.strengths.map((r) => (
-                    <li key={r.rule.id} className="flex gap-2 text-[13px] leading-relaxed text-foreground/80">
-                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
-                      <span>{r.rule.strength}</span>
-                    </li>
-                  ))}
-                  {result.strengths.length === 0 ? <Empty text="No rules satisfied yet." /> : null}
-                </Group>
+                    <Group title={`Detected strengths (${result.strengths.length})`}>
+                      {result.strengths.map((r) => (
+                        <li
+                          key={r.rule.id}
+                          className="flex gap-2 text-[13px] leading-relaxed text-foreground/80"
+                        >
+                          <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
+                          <span>{r.rule.strength}</span>
+                        </li>
+                      ))}
+                      {result.strengths.length === 0 ? (
+                        <Empty text="No rules satisfied yet." />
+                      ) : null}
+                    </Group>
 
-                <Group title={`Issues (${result.issues.length})`}>
-                  {result.issues.map((r) => (
-                    <li key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
-                      <div className="flex gap-2">
-                        <AlertTriangle
-                          className={`mt-0.5 size-3.5 shrink-0 ${
-                            r.rule.severity === "critical" ? "text-destructive" : "text-warning"
-                          }`}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-medium leading-snug">{r.rule.issue}</div>
-                          <div className="mt-1 flex items-center gap-1.5">
-                            <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
-                              {r.rule.category}
-                            </Badge>
-                            <Badge variant="outline" className="h-4 border-border px-1 text-[9px] uppercase">
-                              {r.rule.severity}
-                            </Badge>
+                    <Group title={`Issues (${result.issues.length})`}>
+                      {result.issues.map((r) => (
+                        <li
+                          key={r.rule.id}
+                          className="rounded-lg border border-border bg-card p-2.5"
+                        >
+                          <div className="flex gap-2">
+                            <AlertTriangle
+                              className={`mt-0.5 size-3.5 shrink-0 ${r.rule.severity === "critical" ? "text-destructive" : "text-warning"
+                                }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-medium leading-snug">
+                                {r.rule.issue}
+                              </div>
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className="h-4 border-border px-1 text-[9px] uppercase"
+                                >
+                                  {r.rule.category}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="h-4 border-border px-1 text-[9px] uppercase"
+                                >
+                                  {r.rule.severity}
+                                </Badge>
+                              </div>
+                              {r.rule.learn ? (
+                                <Link
+                                  to="/knowledge"
+                                  search={{ article: r.rule.learn }}
+                                  className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                                >
+                                  <BookOpen className="size-3" /> Learn:{" "}
+                                  {r.rule.learn.replace(/-/g, " ")}
+                                </Link>
+                              ) : null}
+                            </div>
                           </div>
-                          {r.rule.learn ? (
-                            <Link
-                              to="/knowledge"
-                              search={{ article: r.rule.learn }}
-                              className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                            >
-                              <BookOpen className="size-3" /> Learn: {r.rule.learn.replace(/-/g, " ")}
-                            </Link>
-                          ) : null}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                  {result.issues.length === 0 ? <Empty text="No violations detected." /> : null}
-                </Group>
+                        </li>
+                      ))}
+                      {result.issues.length === 0 ? <Empty text="No violations detected." /> : null}
+                    </Group>
 
-                <CostCard cost={cost} ctx={ctx} />
+                    <CostCard cost={cost} ctx={ctx} />
                   </>
                 )}
               </TabsContent>
@@ -293,8 +338,8 @@ export function ReviewPanel({
                   </div>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                     Every sentence above is derived from the{" "}
-                    {result.strengths.length + result.issues.length} deterministic rules evaluated for{" "}
-                    {ctx.pattern} · {ctx.scale} · {ctx.industry}.
+                    {result.strengths.length + result.issues.length} deterministic rules evaluated
+                    for {ctx.pattern} · {ctx.scale} · {ctx.industry}.
                   </p>
                 </div>
               </TabsContent>
@@ -330,7 +375,7 @@ function CostCard({
         <div className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
           Estimated Monthly Cost
         </div>
-        <div className="mt-1 text-2xl font-semibold tabular-nums">$0 / month</div>
+        <div className="mt-1 text-[21px] font-semibold tabular-nums">$0 / month</div>
         <p className="mt-1 text-xs leading-relaxed text-foreground/70">
           Add cloud services to calculate your estimated infrastructure cost.
         </p>
@@ -344,14 +389,16 @@ function CostCard({
         Estimated Monthly Cost
       </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-[28px] font-semibold leading-none tabular-nums transition-all">
+        <span className="text-[21px] font-semibold leading-none tabular-nums transition-all">
           {formatUsd(cost.total)}
         </span>
         <span className="text-xs text-foreground/70">/ month</span>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-xs text-success">
         ↓ {cost.deltaPercent}%
-        <span className="text-foreground/70">vs an unoptimized {ctx.cloud.toUpperCase()} baseline</span>
+        <span className="text-foreground/70">
+          vs an unoptimized {ctx.cloud.toUpperCase()} baseline
+        </span>
       </div>
 
       <button
@@ -359,7 +406,9 @@ function CostCard({
         className="mt-2.5 flex w-full items-center justify-between rounded-md border border-border px-2 py-2 text-xs font-medium transition-colors hover:bg-accent"
       >
         View Cost Breakdown
-        <ChevronDown className={cn("size-3.5 transition-transform", showBreakdown && "rotate-180")} />
+        <ChevronDown
+          className={cn("size-3.5 transition-transform", showBreakdown && "rotate-180")}
+        />
       </button>
 
       {showBreakdown ? (
@@ -367,7 +416,9 @@ function CostCard({
           {cost.lines.map((l) => (
             <div key={l.label} className="flex items-center justify-between py-0.5 text-xs">
               <span className="truncate font-medium text-foreground/85">{l.label}</span>
-              <span className="font-medium tabular-nums text-foreground">{formatUsd(l.amount)}</span>
+              <span className="font-medium tabular-nums text-foreground">
+                {formatUsd(l.amount)}
+              </span>
             </div>
           ))}
           <div className="mt-1 flex items-center justify-between border-t border-border pt-1.5 text-xs font-semibold">
@@ -382,7 +433,9 @@ function CostCard({
         className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-2 py-2 text-xs font-medium transition-colors hover:bg-accent"
       >
         View Assumptions
-        <ChevronDown className={cn("size-3.5 transition-transform", showAssumptions && "rotate-180")} />
+        <ChevronDown
+          className={cn("size-3.5 transition-transform", showAssumptions && "rotate-180")}
+        />
       </button>
       {showAssumptions ? (
         <div className="mt-2 space-y-1 border-t border-border pt-2">

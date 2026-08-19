@@ -51,29 +51,25 @@ function KnowledgePage() {
 
   return (
     <AppShell>
-      <PageHeader title="Knowledge Hub" subtitle="Design → Review → Learn → Improve" />
-
-      <div className="border-b border-border bg-surface/60 px-6 py-5">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="text-base font-semibold tracking-tight">
-            Learn system design, scalability, security and cloud architecture
-          </h2>
-          <div className="relative w-full lg:max-w-sm">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search topics and articles..."
-              aria-label="Search topics and articles"
-              className="h-11 rounded-full pl-10 text-sm shadow-sm"
-            />
-          </div>
+      <PageHeader
+        title="Knowledge Hub"
+        subtitle="Design → Review → Learn → Improve"
+      >
+        <div className="relative w-90 lg:w-100">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search topics and articles..."
+            aria-label="Search topics and articles"
+            className="h-8 w-full rounded-full bg-background pl-9 text-[13px] shadow-sm"
+          />
         </div>
-      </div>
+      </PageHeader>
 
       {open ? (
-        <div className="flex-1 overflow-y-auto p-6">
-          <article className="mx-auto max-w-3xl">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+          <article className="mx-auto max-w-4xl">
             <Button
               variant="ghost"
               size="sm"
@@ -105,7 +101,7 @@ function KnowledgePage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <nav className="w-60 shrink-0 space-y-1 overflow-y-auto border-r border-border p-3">
+          <nav className="w-64 shrink-0 space-y-1 overflow-y-auto border-r border-border p-3 lg:p-4">
             {categories.map((c) => (
               <button
                 key={c.id}
@@ -122,9 +118,9 @@ function KnowledgePage() {
             ))}
           </nav>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 lg:p-8">
             {current ? (
-              <div className="mx-auto max-w-4xl">
+              <div className="mx-auto max-w-6xl">
                 <h2 className="text-lg font-semibold tracking-tight">{current.name}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{current.description}</p>
 

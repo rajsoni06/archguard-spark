@@ -1,3 +1,4 @@
+import dagre from "dagre";
 import type { Capability } from "./catalog";
 import type { ProjectContext } from "./ruleEngine";
 
@@ -33,212 +34,363 @@ export interface LayoutResult {
   summary: string;
 }
 
-/** Ordered request-flow tiers. Each tier lists the capabilities that belong to it. */
-type Tier = { id: string; caps: Capability[] };
-
-const FLOW_TIERS: Tier[] = [
-  { id: "client", caps: ["client"] },
-  { id: "dns", caps: ["dns"] },
-  { id: "edge", caps: ["cdn"] },
-  { id: "waf", caps: ["waf"] },
-  { id: "lb", caps: ["load-balancer"] },
-  { id: "gateway", caps: ["api-gateway"] },
-  { id: "compute", caps: ["compute", "container", "serverless"] },
-  { id: "messaging", caps: ["queue", "pubsub", "streaming"] },
-  { id: "cache", caps: ["cache"] },
-  { id: "data", caps: ["database", "nosql", "object-storage", "block-storage", "archive"] },
-];
-
-/** Tiers that hang off the main flow rather than sitting inside it. */
-const SIDE_TIERS: Tier[] = [
-  { id: "identity", caps: ["auth", "secrets", "encryption"] },
-  { id: "ops", caps: ["monitoring", "tracing"] },
-];
-
-function tiersForPattern(pattern: string): Tier[] {
-  const base = FLOW_TIERS.map((t) => ({ ...t }));
-  if (pattern === "Event-Driven" || pattern === "CQRS") {
-    // Messaging fans out before the compute tier in event-first designs.
-    const withoutMsg = base.filter((t) => t.id !== "messaging");
-    const idx = withoutMsg.findIndex((t) => t.id === "compute");
-    withoutMsg.splice(idx, 0, { id: "messaging", caps: ["queue", "pubsub", "streaming"] });
-    return withoutMsg;
-  }
-  if (pattern === "Serverless") {
-    // Serverless designs route through the gateway, not a load balancer.
-    return base.filter((t) => t.id !== "lb");
-  }
-  return base;
-}
-
-const COL_W = 250;
-const ROW_H = 130;
+// ── Node dimensions ──────────────────────────────────────────────────────────
 const NODE_W = 176;
 const NODE_H = 66;
 
-/**
- * Which flow tiers each boundary kind is expected to contain, and how deeply
- * it nests (lower depth = outermost container).
- */
-const BOUNDARY_SCOPE: Record<string, { tiers: string[]; depth: number }> = {
-  region: { tiers: ["*"], depth: 0 },
-  vpc: { tiers: ["*"], depth: 1 },
-  az: { tiers: ["lb", "gateway", "compute", "messaging", "cache", "data"], depth: 2 },
-  "security-boundary": { tiers: ["edge", "waf", "lb", "gateway"], depth: 3 },
-  "public-subnet": { tiers: ["edge", "waf", "lb", "gateway"], depth: 4 },
-  "private-subnet": { tiers: ["compute", "messaging", "cache"], depth: 4 },
-  k8s: { tiers: ["compute"], depth: 5 },
-  "service-group": { tiers: ["compute", "messaging"], depth: 5 },
-  "database-layer": { tiers: ["data", "cache"], depth: 4 },
+// ── Spacing constants ────────────────────────────────────────────────────────
+// Compact professional spacing — close enough to read flow, not so tight nodes collide.
+const RANK_SEP_LR = 80;  // horizontal gap between tiers in LR mode
+const RANK_SEP_TB = 70;  // vertical gap between tiers in TB mode
+const NODE_SEP_LR = 40;  // vertical gap between nodes in the same tier (LR)
+const NODE_SEP_TB = 24;  // horizontal gap between nodes in the same tier (TB) — keep narrow for compact width
+const EDGE_SEP = 20;     // edge separation within a rank
+const MARGIN = 40;
+const BOUNDARY_PAD_OUTER = 48; // outer boundary (region / vpc)
+const BOUNDARY_PAD_INNER = 32; // inner boundaries (subnet, az, k8s…)
+const ISOLATED_GAP = 100;      // gap between main arch and isolated zone
+
+// ── Capability → logical tier (lower = upstream/entry) ───────────────────────
+// This drives both synthesised edges and boundary affinity.
+const CAP_TIER: Partial<Record<Capability, number>> = {
+  client:           0,
+  dns:              1,
+  cdn:              2,
+  waf:              3,
+  "load-balancer":  4,
+  "api-gateway":    4,
+  auth:             5,
+  secrets:          5,
+  encryption:       5,
+  network:          5,
+  "private-network":5,
+  compute:          6,
+  container:        6,
+  serverless:       6,
+  queue:            7,
+  pubsub:           7,
+  streaming:        7,
+  cache:            8,
+  monitoring:       8,
+  tracing:          8,
+  database:         9,
+  nosql:            9,
+  "object-storage": 9,
+  "block-storage":  9,
+  archive:          9,
 };
 
+/** Returns the lowest (most upstream) tier for a node's capabilities. */
+function tierOf(node: LayoutNode): number {
+  let best = 6; // default: compute
+  for (const cap of node.caps) {
+    const t = CAP_TIER[cap];
+    if (t !== undefined && t < best) best = t;
+  }
+  return best;
+}
+
+// ── Boundary depth (outer → inner nesting order) ─────────────────────────────
+const BOUNDARY_DEPTH: Record<string, number> = {
+  region:            0,
+  vpc:               1,
+  az:                2,
+  "security-boundary": 3,
+  "public-subnet":   4,
+  "private-subnet":  4,
+  "database-layer":  4,
+  k8s:               5,
+  "service-group":   5,
+};
+
+// Capabilities that "belong" inside each boundary kind.
+// Empty array ⇒ boundary wraps ALL active nodes (region, vpc).
+const BOUNDARY_AFFINITY: Record<string, Capability[]> = {
+  region:              [],
+  vpc:                 [],
+  az:                  ["load-balancer","api-gateway","auth","compute","container","serverless","queue","pubsub","streaming","cache","database","nosql"],
+  "security-boundary": ["cdn","waf","load-balancer","api-gateway"],
+  "public-subnet":     ["cdn","waf","load-balancer","api-gateway"],
+  "private-subnet":    ["compute","container","serverless","queue","pubsub","streaming","cache"],
+  "database-layer":    ["database","nosql","object-storage","block-storage","archive","cache"],
+  k8s:                 ["compute","container","serverless"],
+  "service-group":     ["compute","container","serverless","queue","pubsub","streaming"],
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Remove cycles in the user-drawn edge set using a simple DFS. */
+function removeCycles(
+  nodes: LayoutNode[],
+  edges: { source: string; target: string }[],
+): { source: string; target: string }[] {
+  const adj = new Map<string, string[]>();
+  nodes.forEach((n) => adj.set(n.id, []));
+  edges.forEach((e) => adj.get(e.source)?.push(e.target));
+
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  nodes.forEach((n) => color.set(n.id, WHITE));
+
+  const backEdgeSet = new Set<string>();
+
+  function dfs(u: string) {
+    color.set(u, GRAY);
+    for (const v of adj.get(u) ?? []) {
+      if (color.get(v) === GRAY) {
+        backEdgeSet.add(`${u}→${v}`);
+      } else if (color.get(v) === WHITE) {
+        dfs(v);
+      }
+    }
+    color.set(u, BLACK);
+  }
+  nodes.forEach((n) => { if (color.get(n.id) === WHITE) dfs(n.id); });
+
+  return edges.filter((e) => !backEdgeSet.has(`${e.source}→${e.target}`));
+}
+
+/**
+ * Synthesises a minimal set of hierarchical edges when the user has not drawn
+ * any connections. Produces proper fan-out for parallel services at the same
+ * tier (e.g. multiple microservices all connected from one gateway, all
+ * connected to one database) rather than a single linear chain.
+ */
+function synthesiseEdges(nodes: LayoutNode[]): { source: string; target: string }[] {
+  // Group nodes by tier
+  const byTier = new Map<number, LayoutNode[]>();
+  nodes.forEach((n) => {
+    const t = tierOf(n);
+    if (!byTier.has(t)) byTier.set(t, []);
+    byTier.get(t)!.push(n);
+  });
+  const tiers = Array.from(byTier.keys()).sort((a, b) => a - b);
+
+  const synth: { source: string; target: string }[] = [];
+  const addEdge = (src: string, tgt: string) => {
+    if (src !== tgt && !synth.some((e) => e.source === src && e.target === tgt)) {
+      synth.push({ source: src, target: tgt });
+    }
+  };
+
+  for (let i = 0; i < tiers.length - 1; i++) {
+    const from = byTier.get(tiers[i]!)!;
+    const to   = byTier.get(tiers[i + 1]!)!;
+
+    if (from.length === 1) {
+      // One upstream → all downstream (fan-out)
+      to.forEach((t) => addEdge(from[0]!.id, t.id));
+    } else if (to.length === 1) {
+      // All upstream → one downstream (fan-in)
+      from.forEach((f) => addEdge(f.id, to[0]!.id));
+    } else if (from.length <= to.length) {
+      // Distribute upstream evenly across downstream
+      from.forEach((f) => {
+        to.forEach((t) => addEdge(f.id, t.id));
+      });
+    } else {
+      // More upstream than downstream: many→many
+      to.forEach((t) => {
+        from.forEach((f) => addEdge(f.id, t.id));
+      });
+    }
+  }
+  return synth;
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+/**
+ * Professional hierarchical layout engine.
+ *
+ * Priority order (highest → lowest):
+ *   1. Logical hierarchy and dependency flow
+ *   2. No overlapping / collisions
+ *   3. Minimal edge crossings (dagre network-simplex)
+ *   4. Shortest practical connection paths
+ *   5. Balanced spacing
+ *   6. Overall readability
+ */
 export function computeAutoLayout(
   nodes: LayoutNode[],
   ctx: ProjectContext,
   boundaryNodes: LayoutBoundary[] = [],
+  existingEdges: { source: string; target: string }[] = [],
+  direction: "LR" | "TB" = "LR",
 ): LayoutResult {
-  const tiers = tiersForPattern(ctx.pattern);
-  const used = new Set<string>();
-  const columns: { tier: Tier; nodes: LayoutNode[] }[] = [];
-
-  for (const tier of tiers) {
-    const members = nodes.filter((n) => !used.has(n.id) && n.caps.some((c) => tier.caps.includes(c)));
-    members.forEach((m) => used.add(m.id));
-    if (members.length) columns.push({ tier, nodes: members });
+  if (nodes.length === 0) {
+    return { positions: {}, edges: [], boundaries: {}, warnings: [], summary: "" };
   }
 
-  const sideGroups = SIDE_TIERS.map((tier) => {
-    const members = nodes.filter((n) => !used.has(n.id) && n.caps.some((c) => tier.caps.includes(c)));
-    members.forEach((m) => used.add(m.id));
-    return { tier, nodes: members };
-  }).filter((g) => g.nodes.length > 0);
+  // ── 1. Classify active vs isolated nodes ─────────────────────────────────
+  const connectedIds = new Set<string>();
+  existingEdges.forEach((e) => { connectedIds.add(e.source); connectedIds.add(e.target); });
+  const hasEdges = existingEdges.length > 0;
+  const activeNodes  = hasEdges ? nodes.filter((n) =>  connectedIds.has(n.id)) : nodes;
+  const isolatedNodes = hasEdges ? nodes.filter((n) => !connectedIds.has(n.id)) : [];
+  const validIds = new Set(activeNodes.map((n) => n.id));
 
-  const leftovers = nodes.filter((n) => !used.has(n.id));
+  // ── 2. Resolve edge set ───────────────────────────────────────────────────
+  // Use user-drawn edges when available; remove cycles so dagre stays acyclic.
+  let layoutEdges: { source: string; target: string }[];
+  if (hasEdges) {
+    const validEdges = existingEdges.filter(
+      (e) => validIds.has(e.source) && validIds.has(e.target),
+    );
+    layoutEdges = removeCycles(activeNodes, validEdges);
+  } else {
+    layoutEdges = synthesiseEdges(activeNodes);
+  }
 
-  const positions: Record<string, { x: number; y: number }> = {};
-  const originX = 80;
-  const originY = 140;
-
-  columns.forEach((col, ci) => {
-    col.nodes.forEach((n, ri) => {
-      const offset = ((col.nodes.length - 1) / 2) * ROW_H;
-      positions[n.id] = { x: originX + ci * COL_W, y: originY + ri * ROW_H - offset };
-    });
+  // ── 3. Build dagre graph ──────────────────────────────────────────────────
+  const g = new dagre.graphlib.Graph({ multigraph: false });
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({
+    rankdir: direction,
+    ranksep: direction === "LR" ? RANK_SEP_LR : RANK_SEP_TB,
+    nodesep: direction === "LR" ? NODE_SEP_LR : NODE_SEP_TB,
+    edgesep: EDGE_SEP,
+    marginx: MARGIN,
+    marginy: MARGIN,
+    // network-simplex minimises edge crossings; longest-path is faster but
+    // produces more crossings. We prefer quality over speed.
+    ranker: "network-simplex",
+    acyclicer: "greedy",
   });
 
-  // Side rails: identity above the flow, observability below it.
-  sideGroups.forEach((group, gi) => {
-    group.nodes.forEach((n, i) => {
+  // Use 0 extra padding on node dimensions — the nodesep constant handles spacing.
+  activeNodes.forEach((n) => g.setNode(n.id, { width: NODE_W + 8, height: NODE_H + 4, label: n.label }));
+  layoutEdges.forEach((e) => g.setEdge(e.source, e.target));
+
+  dagre.layout(g);
+
+  // ── 4. Extract node positions (dagre gives centre; ReactFlow wants top-left)
+  const positions: Record<string, { x: number; y: number }> = {};
+  activeNodes.forEach((n) => {
+    const nd = g.node(n.id);
+    if (nd) {
       positions[n.id] = {
-        x: originX + Math.min(columns.length - 1, 4) * COL_W + i * 180,
-        y: gi === 0 ? originY - 230 : originY + 250,
+        x: Math.round(nd.x - NODE_W / 2),
+        y: Math.round(nd.y - NODE_H / 2),
+      };
+    }
+  });
+
+  // ── 5. Place isolated nodes in a tidy grid OUTSIDE the main architecture ────
+  // Isolated nodes are always placed clearly outside boundaries — below for both
+  // LR and TB so they never appear inside any boundary container.
+  if (isolatedNodes.length > 0) {
+    const allPos = Object.values(positions);
+    let gridOriginX = MARGIN;
+    let gridOriginY = MARGIN + 200;
+    if (allPos.length > 0) {
+      // Always place isolated nodes below the main architecture for clarity.
+      // This ensures they never visually appear inside Region/VPC/AZ boundaries.
+      gridOriginX = Math.min(...allPos.map((p) => p.x));
+      gridOriginY = Math.max(...allPos.map((p) => p.y + NODE_H)) + ISOLATED_GAP;
+    }
+
+    const COLS = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(isolatedNodes.length))));
+    const cellW = NODE_W + 40;
+    const cellH = NODE_H + 40;
+    isolatedNodes.forEach((n, i) => {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      positions[n.id] = {
+        x: Math.round(gridOriginX + col * cellW),
+        y: Math.round(gridOriginY + row * cellH),
       };
     });
-  });
+  }
 
-  leftovers.forEach((n, i) => {
-    positions[n.id] = { x: originX + i * 200, y: originY + 420 };
-  });
-
-  // ---- boundary containers ----
-  // Boundaries are groups, not services: size each one to enclose the tiers it
-  // owns, padded by nesting depth so outer containers wrap inner ones.
-  const tierOf: Record<string, string> = {};
-  columns.forEach((col) => col.nodes.forEach((n) => (tierOf[n.id] = col.tier.id)));
-  sideGroups.forEach((g) => g.nodes.forEach((n) => (tierOf[n.id] = g.tier.id)));
-
-  const boundaries: Record<string, BoundaryRect> = {};
-  const present = [...boundaryNodes].sort(
-    (a, b) => (BOUNDARY_SCOPE[a.kind]?.depth ?? 9) - (BOUNDARY_SCOPE[b.kind]?.depth ?? 9),
+  // ── 6. Compute boundary rectangles ───────────────────────────────────────
+  // Sort outermost-first so each boundary wraps only its immediate children.
+  const sortedBoundaries = [...boundaryNodes].sort(
+    (a, b) => (BOUNDARY_DEPTH[a.kind] ?? 6) - (BOUNDARY_DEPTH[b.kind] ?? 6),
   );
 
-  present.forEach((b, index) => {
-    const scope = BOUNDARY_SCOPE[b.kind] ?? { tiers: ["*"], depth: 6 };
-    const members = nodes.filter((n) => {
-      const t = tierOf[n.id];
-      if (!t) return scope.tiers.includes("*");
-      return scope.tiers.includes("*") || scope.tiers.includes(t);
+  const boundaries: Record<string, BoundaryRect> = {};
+  sortedBoundaries.forEach((b, idx) => {
+    const affinity = BOUNDARY_AFFINITY[b.kind] ?? [];
+    // Boundaries ONLY wrap active (connected) nodes — never isolated/disconnected ones.
+    // This keeps unused components visually separate from the main architecture.
+    const members = activeNodes.filter((n) => {
+      if (!positions[n.id]) return false;
+      // Ensure this node is truly active (connected), not an isolated stray.
+      if (hasEdges && !connectedIds.has(n.id)) return false;
+      if (affinity.length === 0) return true; // region / vpc → wrap everything active
+      return n.caps.some((c) => affinity.includes(c));
     });
+
     if (members.length === 0) return;
 
     const xs = members.map((m) => positions[m.id]!.x);
     const ys = members.map((m) => positions[m.id]!.y);
-    // Nested containers shrink inward; identical kinds are offset so duplicates
-    // stay distinguishable instead of stacking exactly on top of each other.
-    const pad = 74 - Math.min(scope.depth, 5) * 10 + (index % 2) * 4;
+    const isOuter = (BOUNDARY_DEPTH[b.kind] ?? 6) <= 1;
+    const pad = isOuter ? BOUNDARY_PAD_OUTER : BOUNDARY_PAD_INNER + (idx % 3) * 4;
 
     boundaries[b.id] = {
-      x: Math.min(...xs) - pad,
-      y: Math.min(...ys) - pad,
-      width: Math.max(...xs) - Math.min(...xs) + NODE_W + pad * 2,
-      height: Math.max(...ys) - Math.min(...ys) + NODE_H + pad * 2,
+      x:      Math.round(Math.min(...xs) - pad),
+      y:      Math.round(Math.min(...ys) - pad),
+      width:  Math.round(Math.max(...xs) - Math.min(...xs) + NODE_W + pad * 2),
+      height: Math.round(Math.max(...ys) - Math.min(...ys) + NODE_H + pad * 2),
     };
   });
 
-  // ---- connections ----
-  const edges: LayoutEdge[] = [];
-  const push = (source: string, target: string) => {
-    if (source !== target && !edges.some((e) => e.source === source && e.target === target)) {
-      edges.push({ source, target });
+  // ── 7. Build result edges ─────────────────────────────────────────────────
+  const resultEdges: LayoutEdge[] = [];
+  const pushEdge = (src: string, tgt: string) => {
+    if (src !== tgt && !resultEdges.some((e) => e.source === src && e.target === tgt)) {
+      resultEdges.push({ source: src, target: tgt });
     }
   };
-
-  for (let i = 0; i < columns.length - 1; i++) {
-    const from = columns[i]!;
-    const to = columns[i + 1]!;
-    // Fan-out only where it is meaningful: single upstream → all downstream,
-    // otherwise pair them up so the diagram stays readable.
-    if (from.nodes.length === 1) {
-      to.nodes.forEach((t) => push(from.nodes[0]!.id, t.id));
-    } else if (to.nodes.length === 1) {
-      from.nodes.forEach((f) => push(f.id, to.nodes[0]!.id));
-    } else {
-      from.nodes.forEach((f, idx) => push(f.id, (to.nodes[idx] ?? to.nodes[0]!).id));
-    }
+  if (hasEdges) {
+    existingEdges.forEach((e) => {
+      if (validIds.has(e.source) && validIds.has(e.target)) pushEdge(e.source, e.target);
+    });
+  } else {
+    layoutEdges.forEach((e) => pushEdge(e.source, e.target));
   }
 
-  const computeCol = columns.find((c) => c.tier.id === "compute");
-  const gatewayCol = columns.find((c) => c.tier.id === "gateway") ?? columns.find((c) => c.tier.id === "lb");
-
-  for (const group of sideGroups) {
-    for (const n of group.nodes) {
-      if (group.tier.id === "identity") {
-        const anchor = gatewayCol ?? computeCol;
-        anchor?.nodes.forEach((a) => push(n.id, a.id));
-      } else {
-        computeCol?.nodes.forEach((a) => push(a.id, n.id));
-      }
-    }
-  }
-
-  // Cache should also be readable directly by compute when both exist.
-  const cacheCol = columns.find((c) => c.tier.id === "cache");
-  if (cacheCol && computeCol) {
-    computeCol.nodes.forEach((c) => cacheCol.nodes.forEach((k) => push(c.id, k.id)));
-  }
-
-  // ---- validation ----
+  // ── 8. Warnings ───────────────────────────────────────────────────────────
   const warnings: string[] = [];
   const hasCap = (cap: Capability) => nodes.some((n) => n.caps.includes(cap));
-  const entry = hasCap("api-gateway") || hasCap("load-balancer") || hasCap("cdn");
-  if (computeCol && !entry) {
+  const hasCompute = hasCap("compute") || hasCap("container") || hasCap("serverless");
+  const hasEntry   = hasCap("api-gateway") || hasCap("load-balancer") || hasCap("cdn");
+
+  if (hasCompute && !hasEntry) {
+    warnings.push("No entry point detected. Consider adding an API Gateway or Load Balancer.");
+  }
+  if (!hasCompute && (hasCap("database") || hasCap("nosql"))) {
+    warnings.push("Data tier with no compute tier — add a backend service between entry and database.");
+  }
+  if (isolatedNodes.length > 0) {
+    const names = isolatedNodes.map((n) => n.label).join(", ");
     warnings.push(
-      "These components cannot form a complete request flow. Consider adding an API Gateway or Load Balancer in front of your services.",
+      `${names} ${isolatedNodes.length === 1 ? "is" : "are"} not connected and ${isolatedNodes.length === 1 ? "was" : "were"} placed outside the main diagram.`,
     );
   }
-  if (!computeCol && columns.some((c) => c.tier.id === "data")) {
-    warnings.push("There is a data tier with no compute tier — add a backend service between the entry point and the database.");
-  }
-  if (leftovers.length) {
-    warnings.push(
-      `${leftovers.map((l) => l.label).join(", ")} could not be placed in the request flow and were parked below the diagram.`,
-    );
-  }
-  if (nodes.length < 3) {
-    warnings.push("Add at least three components so Auto Layout can infer a meaningful flow.");
+  if (nodes.length < 2) {
+    warnings.push("Add at least two components so Auto Layout can infer a meaningful flow.");
   }
 
-  const summary = columns.map((c) => c.nodes.map((n) => n.label).join(" / ")).join(" → ");
+  // ── 9. Human-readable summary ─────────────────────────────────────────────
+  const arrow = direction === "LR" ? " → " : " ↓ ";
+  const sortAxis = (id: string) => {
+    const p = positions[id];
+    return direction === "LR" ? (p?.x ?? 0) : (p?.y ?? 0);
+  };
+  const BUCKET = direction === "LR" ? RANK_SEP_LR : RANK_SEP_TB;
+  const buckets = new Map<number, string[]>();
+  activeNodes.forEach((n) => {
+    const slot = Math.round(sortAxis(n.id) / BUCKET);
+    if (!buckets.has(slot)) buckets.set(slot, []);
+    buckets.get(slot)!.push(n.label);
+  });
+  const summary = Array.from(buckets.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, labels]) => labels.join(" / "))
+    .join(arrow);
 
-  return { positions, edges, boundaries, warnings, summary };
+  return { positions, edges: resultEdges, boundaries, warnings, summary };
 }

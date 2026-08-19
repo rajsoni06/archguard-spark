@@ -1,5 +1,5 @@
-import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
-import { Trash2 } from "lucide-react";
+import { Handle, NodeResizer, Position, type NodeProps, useReactFlow } from "@xyflow/react";
+import { Trash2, GripHorizontal } from "lucide-react";
 import { BOUNDARY_KINDS, findService, type CloudId } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 
@@ -42,15 +42,27 @@ export function ServiceNode({ id, data, selected }: NodeProps) {
     <div
       className={cn(
         "group relative min-w-[164px] rounded-lg border bg-card px-3 py-2.5 transition-all",
-        selected ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/50",
+        selected
+          ? "border-primary ring-2 ring-primary/30"
+          : "border-border hover:border-primary/50",
         d.status === "warning" && "border-warning/70",
         d.status === "critical" && "border-destructive/70",
       )}
       style={{ boxShadow: "0 6px 18px -12px oklch(0 0 0 / 0.9)" }}
     >
       <DeleteControl id={id} selected={selected} />
-      <Handle type="target" position={Position.Top} className="!size-2 !border-none !bg-primary/70" />
-      <Handle type="target" position={Position.Left} className="!size-2 !border-none !bg-primary/70" />
+      <Handle
+        id="top"
+        type="target"
+        position={Position.Top}
+        className="!size-2 !border-none !bg-primary/70"
+      />
+      <Handle
+        id="left"
+        type="target"
+        position={Position.Left}
+        className="!size-2 !border-none !bg-primary/70"
+      />
       <div className="flex items-center gap-2.5">
         <div
           className="flex size-7 shrink-0 items-center justify-center rounded-md"
@@ -68,8 +80,18 @@ export function ServiceNode({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!size-2 !border-none !bg-primary/70" />
-      <Handle type="source" position={Position.Right} className="!size-2 !border-none !bg-primary/70" />
+      <Handle
+        id="bottom"
+        type="source"
+        position={Position.Bottom}
+        className="!size-2 !border-none !bg-primary/70"
+      />
+      <Handle
+        id="right"
+        type="source"
+        position={Position.Right}
+        className="!size-2 !border-none !bg-primary/70"
+      />
     </div>
   );
 }
@@ -91,7 +113,7 @@ export function BoundaryNode({ id, data, selected }: NodeProps) {
     <>
       <NodeResizer minWidth={180} minHeight={120} isVisible={selected} color="var(--primary)" />
       <div
-        className="group size-full rounded-xl border-2 border-dashed"
+        className="group size-full rounded-xl border-2 border-solid"
         style={{
           borderColor: `color-mix(in oklab, ${def.color} 55%, transparent)`,
           backgroundColor: `color-mix(in oklab, ${def.color} 7%, transparent)`,
@@ -100,7 +122,10 @@ export function BoundaryNode({ id, data, selected }: NodeProps) {
         <DeleteControl id={id} selected={selected} />
         <span
           className="absolute -top-2.5 left-3 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-          style={{ borderColor: `color-mix(in oklab, ${def.color} 45%, transparent)`, color: def.color }}
+          style={{
+            borderColor: `color-mix(in oklab, ${def.color} 45%, transparent)`,
+            color: def.color,
+          }}
         >
           {d.label}
         </span>
@@ -113,16 +138,34 @@ export interface TextNodeData extends Record<string, unknown> {
   label: string;
 }
 
-export function TextNode({ data, selected }: NodeProps) {
+export function TextNode({ id, data, selected }: NodeProps) {
   const d = data as TextNodeData;
+  const { updateNodeData } = useReactFlow();
+
   return (
     <div
       className={cn(
-        "rounded-md px-2 py-1 text-[13px] font-medium text-muted-foreground",
-        selected && "ring-1 ring-primary/50",
+        "group relative flex items-center justify-center rounded-md text-[13px] font-medium text-foreground p-1.5",
+        selected ? "ring-1 ring-primary/50 bg-background/50" : "hover:bg-background/30"
       )}
     >
-      {d.label}
+      <DeleteControl id={id} selected={selected} />
+      
+      <div className="absolute -top-5 left-1/2 flex -translate-x-1/2 cursor-grab items-center justify-center rounded border bg-card p-0.5 text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+        <GripHorizontal className="size-3" />
+      </div>
+
+      <div className="relative flex min-w-[60px] items-center justify-center">
+        <span className="invisible whitespace-pre px-1">
+          {d.label || "Type..."}
+        </span>
+        <input
+          value={d.label}
+          onChange={(e) => updateNodeData(id, { label: e.target.value })}
+          className="nodrag absolute inset-0 size-full bg-transparent px-1 text-center outline-none"
+          placeholder="Type..."
+        />
+      </div>
     </div>
   );
 }

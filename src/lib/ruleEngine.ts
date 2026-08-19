@@ -7,7 +7,13 @@ export interface ProjectContext {
   scale: string;
   industry: string;
   priority: string;
+  // System Requirements (new)
+  traffic: string;       // "1K RPS" | "10K RPS" | "100K RPS" | "1M+ RPS"
+  availability: string;  // "99%" | "99.9%" | "99.99%" | "99.999%"
+  consistency: string;   // "Strong" | "Eventual" | "Configurable"
+  latency: string;       // "<50ms" | "<100ms" | "<500ms" | "<1sec"
 }
+
 
 export interface GraphNode {
   id: string;
@@ -49,6 +55,7 @@ export const CATEGORIES: RuleCategory[] = [
   "Observability",
 ];
 
+
 export type Severity = "critical" | "high" | "medium" | "low";
 
 const SEVERITY_WEIGHT: Record<Severity, number> = {
@@ -75,10 +82,17 @@ export interface Rule {
 const scaleRank = (scale: string) =>
   ["1K Users", "10K Users", "100K Users", "1M+ Users", "10M+ Users"].indexOf(scale);
 
+const trafficRank = (traffic: string) =>
+  ["1K RPS", "10K RPS", "100K RPS", "1M+ RPS"].indexOf(traffic ?? "1K RPS");
+
+const availabilityRank = (availability: string) =>
+  ["99%", "99.9%", "99.99%", "99.999%"].indexOf(availability ?? "99%");
+
 const has = (g: ArchGraph, cap: Capability) => g.nodes.some((n) => n.caps.includes(cap));
 const countCap = (g: ArchGraph, cap: Capability) =>
   g.nodes.filter((n) => n.caps.includes(cap)).length;
 const always = () => true;
+
 
 const inPrivate = (n: GraphNode) =>
   n.boundary === "private-subnet" || n.boundary === "database-layer";
@@ -397,6 +411,117 @@ export const RULES: Rule[] = [
     applies: (c) => ["Microservices", "Event-Driven", "Distributed System"].includes(c.pattern),
     satisfied: (g) => has(g, "tracing"),
   },
+  // ---------------- Architecture Trade-offs (NEW) ----------------
+  {
+    id: "tradeoff-overengineered-queue",
+    category: "Cost Optimization",
+    severity: "medium",
+    strength: "Messaging complexity matches workload scale",
+    issue: "Streaming / event-bus technology may be over-engineered for this scale",
+    recommendation:
+      "At 1K–10K users a simple job queue is cheaper and simpler than a full streaming platform. Reserve Kafka / Kinesis for 100K+ RPS workloads with strict ordering or replay needs.",
+    learn: "message-queues",
+    applies: (c) =>
+      scaleRank(c.scale) <= 1 &&
+      ["Microservices", "Monolithic", "Layered (N-Tier)"].includes(c.pattern),
+    satisfied: (g) => !has(g, "streaming"),
+  },
+  // ---------------- SPOF Detection (NEW) ----------------
+  {
+    id: "spof-single-backend",
+    category: "Availability",
+    severity: "critical",
+    strength: "Multiple compute units prevent a backend Single Point of Failure",
+    issue: "Single backend instance — SPOF detected for your availability target",
+    recommendation:
+      "Your availability target requires at least two backend instances behind a load balancer in separate AZs. A single instance means any restart or hardware failure causes full downtime.",
+    learn: "high-availability",
+    applies: (c) => availabilityRank(c.availability ?? "99%") >= 2,
+    satisfied: (g) =>
+      countCap(g, "compute") >= 2 || has(g, "autoscaling") || has(g, "serverless"),
+  },
+  {
+    id: "spof-single-db-availability",
+    category: "Availability",
+    severity: "critical",
+    strength: "Database replication matches the availability target",
+    issue: "Single database instance with a high availability target — critical SPOF",
+    recommendation:
+      "Your availability target requires database redundancy. Enable Multi-AZ or a managed HA engine so a single node failure does not take down the data tier.",
+    learn: "replication",
+    applies: (c) => availabilityRank(c.availability ?? "99%") >= 2,
+    satisfied: (g) =>
+      countCap(g, "managed-database") >= 1 || countCap(g, "database") >= 2,
+  },
+  // ---------------- Async / DLQ Patterns (NEW) ----------------
+  {
+    id: "async-dlq-missing",
+    category: "Reliability",
+    severity: "high",
+    strength: "Dead-letter queue pattern handles permanently-failing messages",
+    issue: "Async queue detected without a Dead-Letter Queue (DLQ) pattern",
+    recommendation:
+      "Without a DLQ, poison messages that always fail will be retried indefinitely, consuming worker capacity. Add a separate DLQ destination to isolate and inspect failed messages.",
+    learn: "message-queues",
+    applies: (c) =>
+      ["Event-Driven", "Microservices", "CQRS", "Distributed System"].includes(c.pattern),
+    satisfied: (g) => {
+      const hasQueue = has(g, "queue") || has(g, "pubsub");
+      if (!hasQueue) return true;
+      return countCap(g, "queue") >= 2;
+    },
+  },
+  // ---------------- Rate Limiting (NEW) ----------------
+  {
+    id: "rate-limiting-missing",
+    category: "Security",
+    severity: "high",
+    strength: "Rate limiting protects the API boundary from abuse and overload",
+    issue: "No rate-limiting at the API boundary for a high-traffic workload",
+    recommendation:
+      "At 100K+ RPS, without rate limiting a single mis-configured client can exhaust your compute tier. Enforce throttling at the API Gateway or WAF layer.",
+    learn: "owasp",
+    applies: (c) => trafficRank(c.traffic ?? "1K RPS") >= 2,
+    satisfied: (g) => has(g, "api-gateway") || has(g, "waf"),
+  },
+  // ---------------- Capacity / Latency (NEW) ----------------
+  {
+    id: "capacity-bottleneck",
+    category: "Scalability",
+    severity: "high",
+    strength: "Auto scaling ensures the architecture can sustain peak traffic",
+    issue: "High traffic target without auto scaling — capacity bottleneck likely",
+    recommendation:
+      "At 1M+ RPS a fixed instance count becomes the bottleneck before peak. Enable auto scaling so capacity is added automatically under load.",
+    learn: "horizontal-scaling",
+    applies: (c) => trafficRank(c.traffic ?? "1K RPS") >= 3,
+    satisfied: (g) => has(g, "autoscaling") || has(g, "serverless"),
+  },
+  {
+    id: "latency-cdn-missing",
+    category: "Performance",
+    severity: "high",
+    strength: "CDN at the edge satisfies the low-latency requirement",
+    issue: "Low-latency target without a CDN — global users will see high origin latency",
+    recommendation:
+      "For a <50ms or <100ms latency target, serve cacheable content from a CDN edge. Round-trip to an origin datacenter typically adds 50–200ms for distant users.",
+    learn: "cdn",
+    applies: (c) =>
+      (c.latency ?? "<500ms") === "<50ms" || (c.latency ?? "<500ms") === "<100ms",
+    satisfied: (g) => has(g, "cdn"),
+  },
+  {
+    id: "consistency-cache-required",
+    category: "Performance",
+    severity: "medium",
+    strength: "Cache layer supports the eventual consistency workload",
+    issue: "Eventual consistency selected without a cache layer — reads always hit the database",
+    recommendation:
+      "Eventual consistency architectures benefit most from a cache. Reads can be served from cache while writes propagate to replicas, reducing latency and database load.",
+    learn: "caching",
+    applies: (c) => (c.consistency ?? "Strong") === "Eventual" && scaleRank(c.scale) >= 1,
+    satisfied: (g) => has(g, "cache"),
+  },
 ];
 
 export interface RuleResult {
@@ -525,8 +650,14 @@ export function explainAnalysis(result: AnalysisResult, ctx: ProjectContext): st
         ? top[0]
         : `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
 
+  const requirementsCtx: string[] = [];
+  if (ctx.availability && ctx.availability !== "99%") requirementsCtx.push(`${ctx.availability} availability`);
+  if (ctx.traffic && ctx.traffic !== "1K RPS") requirementsCtx.push(`${ctx.traffic} traffic`);
+  if (ctx.latency && ctx.latency !== "<1sec") requirementsCtx.push(`${ctx.latency} latency`);
+  const reqSuffix = requirementsCtx.length > 0 ? ` targeting ${requirementsCtx.join(", ")}` : "";
+
   return [
-    `Your ${ctx.pattern.toLowerCase()} design on ${ctx.cloud.toUpperCase()} scores ${result.overall}/100 (${result.maturity}) for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}.`,
+    `Your ${ctx.pattern.toLowerCase()} design on ${ctx.cloud.toUpperCase()} scores ${result.overall}/100 (${result.maturity}) for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}${reqSuffix}.`,
     `${worst?.category ?? "Security"} is the weakest dimension at ${worst?.score ?? 0}/100, driven mainly by ${list}.`,
     result.issues[0]
       ? `Highest-impact next step: ${result.issues[0].rule.recommendation}`

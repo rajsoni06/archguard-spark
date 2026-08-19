@@ -258,8 +258,51 @@
 .react-flow__controls-button svg {
   fill: currentColor;
   stroke: currentColor;
-  stroke-width: 0.6;
+  stroke-width: 1.2;
   color: var(--foreground);
-  max-width: 15px;
-  max-height: 15px;
+  width: 14px;
+  height: 14px;
+}
+
+.react-flow__controls-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* Force certain auth modal texts to black in dark mode as requested */
+.dark .force-dark-black {
+  color: #000 !important;
+}
+/* make placeholder text black in dark mode for inputs marked force-dark-black */
+.dark input.force-dark-black::placeholder,
+.dark textarea.force-dark-black::placeholder {
+  color: #000 !important;
+  opacity: 0.85;
+}
+
+/* Dark-blue link style for auth modal action */
+.dark-blue-link {
+  color: oklch(0.28 0.15 245); /* accessible dark-blue in oklch */
+}
+.dark .dark-blue-link {
+  color: oklch(0.28 0.15 245);
+}
+
+/* Footer white text in dark mode */
+.dark .dark-footer {
+  color: #fff !important;
+}
+.dark .dark-footer a {
+  color: #fff !important;
+}
+/* Ensure all footer child elements render white in dark mode (stronger specificity) */
+.dark .dark-footer,
+.dark .dark-footer * {
+  color: #fff !important;
+}
+.dark .dark-footer a,
+.dark .dark-footer a:visited,
+.dark .dark-footer a:hover,
+.dark .dark-footer a:active {
+  color: #fff !important;
 }
