@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DesignerRouteImport } from './routes/designer'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -43,6 +44,11 @@ const HistoryRoute = HistoryRouteImport.update({
 const KnowledgeRoute = KnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/designer': typeof DesignerRoute
   '/history': typeof HistoryRoute
   '/knowledge': typeof KnowledgeRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/designer'
     | '/history'
     | '/knowledge'
+    | '/profile'
     | '/projects'
     | '/reports'
     | '/settings'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/designer'
     | '/history'
     | '/knowledge'
+    | '/profile'
     | '/projects'
     | '/reports'
     | '/settings'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/designer'
     | '/history'
     | '/knowledge'
+    | '/profile'
     | '/projects'
     | '/reports'
     | '/settings'
@@ -153,6 +165,7 @@ export interface RootRouteChildren {
   DesignerRoute: typeof DesignerRoute
   HistoryRoute: typeof HistoryRoute
   KnowledgeRoute: typeof KnowledgeRoute
+  ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRoute
   ReportsRoute: typeof ReportsRoute
   SettingsRoute: typeof SettingsRoute
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       path: '/knowledge'
       fullPath: '/knowledge'
       preLoaderRoute: typeof KnowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -241,6 +261,7 @@ const rootRouteChildren: RootRouteChildren = {
   DesignerRoute: DesignerRoute,
   HistoryRoute: HistoryRoute,
   KnowledgeRoute: KnowledgeRoute,
+  ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRoute,
   ReportsRoute: ReportsRoute,
   SettingsRoute: SettingsRoute,

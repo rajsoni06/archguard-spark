@@ -208,6 +208,216 @@
   background-image: var(--gradient-hero);
 }
 
+/* Landing page: lightweight, transform/opacity-only motion keeps the hero
+   lively without turning the home screen into a canvas animation. */
+.home-ambient {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 900px;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 55% at 15% 0%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 72%),
+    radial-gradient(55% 45% at 90% 8%, color-mix(in oklab, var(--info) 16%, transparent), transparent 70%);
+}
+
+.home-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image: linear-gradient(color-mix(in oklab, var(--primary) 10%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--primary) 10%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+
+.home-orb {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  filter: blur(1px);
+  opacity: 0.28;
+  will-change: transform;
+}
+
+.home-orb-one {
+  top: 112px;
+  left: 44%;
+  width: 190px;
+  height: 190px;
+  background: color-mix(in oklab, var(--primary) 24%, transparent);
+  animation: home-float-one 16s ease-in-out infinite;
+}
+
+.home-orb-two {
+  top: 410px;
+  right: 9%;
+  width: 120px;
+  height: 120px;
+  background: color-mix(in oklab, var(--info) 22%, transparent);
+  animation: home-float-two 19s ease-in-out infinite;
+}
+
+.home-orb-three {
+  top: 530px;
+  left: 9%;
+  width: 84px;
+  height: 84px;
+  background: color-mix(in oklab, var(--success) 16%, transparent);
+  animation: home-float-two 22s ease-in-out -5s infinite reverse;
+}
+
+.home-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--success);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--success) 14%, transparent);
+}
+
+.home-reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-reveal-delay-1 { transition-delay: 80ms; }
+.home-reveal-delay-2 { transition-delay: 150ms; }
+.home-reveal-delay-3 { transition-delay: 220ms; }
+.home-reveal-delay-4 { transition-delay: 290ms; }
+.home-reveal-delay-5 { transition-delay: 360ms; }
+
+.home-primary-button {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 14px 28px -16px color-mix(in oklab, var(--primary) 80%, transparent);
+}
+
+.home-primary-button::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-110%);
+  background: linear-gradient(110deg, transparent, rgb(255 255 255 / 0.22), transparent);
+  transition: transform 600ms ease;
+}
+
+.home-primary-button:hover::after { transform: translateX(110%); }
+.home-secondary-button:hover { transform: translateY(-2px); }
+
+.home-stat,
+.home-feature-card,
+.home-flow-card,
+.home-cta {
+  box-shadow: 0 22px 50px -34px oklch(0.2 0.04 258 / 0.62);
+}
+
+.home-feature-card {
+  min-height: 190px;
+}
+
+.home-flow-visual {
+  animation: home-float-card 8s ease-in-out infinite;
+}
+
+.home-flow-card {
+  box-shadow: 0 30px 80px -42px color-mix(in oklab, var(--primary) 45%, transparent);
+}
+
+.home-trace-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--success) 30%, transparent);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.home-trace-status .home-live-dot {
+  width: 5px;
+  height: 5px;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 12%, transparent);
+  animation: home-trace-blink 1.8s ease-in-out infinite;
+}
+
+.home-flow-rail {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 19px;
+  width: 1px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--primary) 24%, transparent);
+}
+
+.home-flow-rail::after {
+  position: absolute;
+  top: -16px;
+  left: -1px;
+  width: 3px;
+  height: 16px;
+  border-radius: 999px;
+  content: "";
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 80%, transparent);
+  animation: home-signal-travel 3.2s linear infinite;
+}
+
+.home-flow-step:hover { box-shadow: 0 10px 24px -18px color-mix(in oklab, var(--primary) 80%, transparent); }
+
+@keyframes home-signal-travel {
+  to { transform: translateY(260px); }
+}
+
+@keyframes home-trace-blink {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes home-float-one {
+  0%, 100% { transform: translate3d(-10px, 0, 0) scale(1); }
+  50% { transform: translate3d(18px, 24px, 0) scale(1.08); }
+}
+
+@keyframes home-float-two {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-18px, 18px, 0); }
+}
+
+@keyframes home-float-card {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -7px, 0); }
+}
+
+@media (max-width: 640px) {
+  .home-ambient { height: 780px; }
+  .home-grid { background-size: 44px 44px; }
+  .home-orb-one { left: 60%; width: 130px; height: 130px; }
+  .home-orb-two { right: -25px; }
+  .home-orb-three { left: -20px; }
+  .home-feature-card { min-height: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-page *,
+  .home-page *::before,
+  .home-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .home-reveal { opacity: 1; transform: none; }
+}
+
 /* React Flow theming */
 .react-flow__attribution {
   display: none;
@@ -305,4 +515,132 @@
 .dark .dark-footer a:hover,
 .dark .dark-footer a:active {
   color: #fff !important;
+}
+
+/* Knowledge Hub learning guides stay open so the full concept list is visible. */
+[class~="max-h-40"][class~="overflow-y-auto"] {
+  max-height: none !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+}
+
+/* Give the definition and concept panels a quieter, elevated reading surface. */
+div[class*="lg:grid-cols-[0.85fr_1.15fr]"] > div {
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px -20px oklch(0 0 0 / 0.55);
+}
+
+div[class*="lg:grid-cols-[0.85fr_1.15fr]"] > div:first-child {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 9%, var(--card)), var(--card));
+}
+
+/* Keep the dashboard information-dense without changing shared card spacing. */
+[class~="max-w-6xl"][class~="space-y-3"] [class~="p-5"] {
+  padding: 1rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="p-6"] {
+  padding: 1rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="px-5"] {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="py-4"] {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="mt-5"] {
+  margin-top: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="gap-4"] {
+  gap: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-3"] [class~="text-3xl"] {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+}
+
+/* Compact portfolio, history, and settings pages while keeping their layouts intact. */
+[class~="max-w-6xl"][class~="space-y-5"] [class~="p-5"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="p-5"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="p-6"] {
+  padding: 1rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="sm:p-7"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="sm:p-7"] {
+  padding: 1.25rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="px-5"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="px-5"] {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="py-4"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="py-4"] {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="mt-6"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="mt-6"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="mt-5"] {
+  margin-top: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="gap-5"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="gap-5"] {
+  gap: 0.75rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="text-3xl"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="text-3xl"] {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+}
+[class~="max-w-6xl"][class~="space-y-5"] [class~="p-7"],
+[class~="max-w-5xl"][class~="space-y-5"] [class~="p-7"] {
+  padding: 1.25rem !important;
+}
+
+@keyframes score-bar-fill {
+  from { transform: scaleX(0); transform-origin: left; }
+  to { transform: scaleX(1); transform-origin: left; }
+}
+
+.score-bar-fill { animation: score-bar-fill 650ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .score-bar-fill { animation: none; }
+}
+
+@keyframes failure-simulator-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.98); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes failure-simulator-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.98); }
+}
+
+.failure-simulator-backdrop { animation: failure-simulator-in 180ms ease-out both; }
+.failure-simulator-dialog { animation: failure-simulator-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.failure-simulator-backdrop-closing { animation: failure-simulator-out 180ms ease-in both; }
+.failure-simulator-dialog-closing { animation: failure-simulator-out 180ms ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .failure-simulator-backdrop,
+  .failure-simulator-dialog,
+  .failure-simulator-backdrop-closing,
+  .failure-simulator-dialog-closing { animation: none; }
+}
+
+@keyframes review-tab-enter {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.tab-panel-content[data-state="active"] {
+  animation: review-tab-enter 190ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel-content[data-state="active"] { animation: none; }
 }

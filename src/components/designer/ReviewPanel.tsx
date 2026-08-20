@@ -18,13 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatUsd, type CostEstimate } from "@/lib/costEngine";
-import { explainAnalysis, type AnalysisResult, type ProjectContext } from "@/lib/ruleEngine";
+import { explainAnalysis, getArchitectureRoadmap, type AnalysisResult, type ProjectContext } from "@/lib/ruleEngine";
 import { cn } from "@/lib/utils";
 
 interface Props {
   result: AnalysisResult | null;
   ctx: ProjectContext;
   cost: CostEstimate;
+  open: boolean;
   collapsed: boolean;
   width: number;
   onResize: (width: number) => void;
@@ -38,6 +39,7 @@ export function ReviewPanel({
   result,
   ctx,
   cost,
+  open,
   collapsed,
   width,
   onResize,
@@ -52,6 +54,7 @@ export function ReviewPanel({
   const tabScroll = useRef<Record<string, number>>({});
   const [dragging, setDragging] = useState(false);
   const isEmpty = nodeCount === 0;
+  const tabIndex = ["analysis", "score", "cost", "suggestions", "ai"].indexOf(activeTab);
 
   const startResize = useCallback(() => setDragging(true), []);
 
@@ -77,10 +80,12 @@ export function ReviewPanel({
   return (
     <aside
       ref={asideRef}
-      style={{ width: collapsed ? 36 : width }}
+      aria-hidden={!open}
+      style={{ width: open ? (collapsed ? 36 : width) : 0 }}
       className={cn(
-        "relative flex shrink-0 flex-col border-l border-border bg-surface",
-        dragging ? "transition-none" : "transition-[width] duration-300 ease-out",
+        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface",
+        dragging ? "transition-none" : "transition-[width] duration-300 ease-in-out",
+        "motion-reduce:transition-none",
       )}
     >
       {!collapsed ? (
@@ -111,8 +116,9 @@ export function ReviewPanel({
       <div
         style={{ width: collapsed ? 290 : width, minWidth: collapsed ? 290 : width }}
         className={cn(
-          "flex h-full flex-col overflow-hidden transition-opacity duration-200",
-          collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+          "flex h-full flex-col overflow-hidden transition-[transform,opacity] duration-300 ease-out",
+          open && !collapsed ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-3 opacity-0",
+          "motion-reduce:transform-none motion-reduce:transition-none",
         )}
       >
         <div className="flex items-center justify-between border-b border-border pl-3 pr-3 py-2.5">
@@ -127,15 +133,15 @@ export function ReviewPanel({
         </div>
 
         {!result ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
-            <div className="rounded-xl border border-border bg-card p-5">
-              <div className="text-sm font-semibold">Review your architecture</div>
-              <p className="mt-2 text-[13px] leading-relaxed text-foreground/75">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3">
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="text-[13px] font-semibold">Review your architecture</div>
+              <p className="mt-1.5 text-xs leading-relaxed text-foreground/75">
                 Design your architecture, then run the deterministic rule engine to get category
                 scores, strengths and violations.
               </p>
-              <Button className="mt-4 h-9 w-full text-sm" onClick={onRun}>
-                <Sparkles className="size-4" /> Review Architecture
+              <Button className="mt-3 h-8 w-full gap-1.5 text-xs" onClick={onRun}>
+                <Sparkles className="size-3.5" /> Review Architecture
               </Button>
             </div>
             <CostCard cost={cost} ctx={ctx} />
@@ -158,26 +164,27 @@ export function ReviewPanel({
             }}
             className="flex min-h-0 flex-1 flex-col gap-0"
           >
-            <TabsList className="m-2.5 grid grid-cols-5">
-              <TabsTrigger value="analysis" className="text-[11px]">
+            <TabsList className="relative m-2.5 grid grid-cols-5">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 rounded-md bg-background shadow transition-[left,width] duration-200 ease-out motion-reduce:transition-none" style={{ left: `calc(${Math.max(tabIndex, 0) * 20}% + 0.25rem)`, width: "calc(20% - 0.5rem)" }} />
+              <TabsTrigger value="analysis" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Analysis
               </TabsTrigger>
-              <TabsTrigger value="score" className="text-[11px]">
+              <TabsTrigger value="score" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Score
               </TabsTrigger>
-              <TabsTrigger value="cost" className="text-[11px]">
+              <TabsTrigger value="cost" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Cost
               </TabsTrigger>
-              <TabsTrigger value="suggestions" className="text-[11px]">
+              <TabsTrigger value="suggestions" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Fixes
               </TabsTrigger>
-              <TabsTrigger value="ai" className="text-[11px]">
+              <TabsTrigger value="ai" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 AI
               </TabsTrigger>
             </TabsList>
 
             <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-              <TabsContent value="analysis" className="mt-0 space-y-4">
+              <TabsContent value="analysis" className="tab-panel-content mt-0 space-y-4">
                 {isEmpty ? (
                   <EmptyArchitecture onFocusLibrary={onFocusLibrary} />
                 ) : (
@@ -248,7 +255,7 @@ export function ReviewPanel({
                 )}
               </TabsContent>
 
-              <TabsContent value="score" className="mt-0">
+              <TabsContent value="score" className="tab-panel-content mt-0">
                 {isEmpty ? <EmptyArchitecture onFocusLibrary={onFocusLibrary} /> : null}
                 <div className="flex flex-col items-center py-3">
                   {isEmpty ? (
@@ -276,7 +283,7 @@ export function ReviewPanel({
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
                         <div
-                          className="h-full rounded-full transition-all duration-500"
+                          className="score-bar-fill h-full rounded-full transition-all duration-500"
                           style={{
                             width: `${c.score ?? 0}%`,
                             backgroundColor:
@@ -302,11 +309,11 @@ export function ReviewPanel({
                 </div>
               </TabsContent>
 
-              <TabsContent value="cost" className="mt-0 space-y-3">
+              <TabsContent value="cost" className="tab-panel-content mt-0 space-y-3">
                 <CostCard cost={cost} ctx={ctx} defaultOpen />
               </TabsContent>
 
-              <TabsContent value="suggestions" className="mt-0 space-y-2">
+              <TabsContent value="suggestions" className="tab-panel-content mt-0 space-y-2">
                 {isEmpty ? <EmptyArchitecture onFocusLibrary={onFocusLibrary} /> : null}
                 {result.issues.map((r, i) => (
                   <div key={r.rule.id} className="rounded-lg border border-border bg-card p-2.5">
@@ -323,23 +330,35 @@ export function ReviewPanel({
                 ) : null}
               </TabsContent>
 
-              <TabsContent value="ai" className="mt-0 space-y-3">
+              <TabsContent value="ai" className="tab-panel-content mt-0 space-y-3">
                 <div className="rounded-lg border border-border bg-card p-3">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
                     <Bot className="size-3.5" /> AI explanation
                   </div>
-                  <p className="mt-2 text-[13px] leading-relaxed text-foreground/80">
-                    {explainAnalysis(result, ctx)}
-                  </p>
+                  <div className="mt-2 space-y-3 text-[13px] leading-relaxed text-foreground/80">
+                    {explainAnalysis(result, ctx).split("\n\n").map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                    <Sparkles className="size-3.5" /> Architecture roadmap
+                  </div>
+                  <ol className="mt-2 space-y-2.5">
+                    {getArchitectureRoadmap(result, ctx).map((step, index) => (
+                      <li key={step} className="flex items-start gap-2 text-[12px] leading-relaxed text-foreground/80">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[10px] font-semibold text-primary">{index + 1}</span>
+                        <span><span className="font-semibold text-foreground">Step {index + 1}.</span> {step}</span>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
                 <div className="rounded-lg border border-dashed border-border p-3">
                   <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                    <Sparkles className="size-3.5" /> Rule Engine decides · AI explains
+                    <Sparkles className="size-3.5" /> Canvas snapshot
                   </div>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                    Every sentence above is derived from the{" "}
-                    {result.strengths.length + result.issues.length} deterministic rules evaluated
-                    for {ctx.pattern} · {ctx.scale} · {ctx.industry}.
+                    I used the services, connections, workload targets, and review findings from
+                    this canvas to form the recommendation above.
                   </p>
                 </div>
               </TabsContent>

@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import {
   ArrowRight,
+  ArrowUpRight,
+  Activity,
   BookOpen,
   Bot,
   Database,
@@ -13,6 +15,7 @@ import {
   ShieldCheck,
   Scale,
   Sparkles,
+  CheckCircle2,
   Users,
   Workflow,
   Moon,
@@ -60,11 +63,6 @@ const FEATURES = [
     body: "AI explains every rule-engine finding and turns it into actionable remediation steps.",
   },
   {
-    icon: Gauge,
-    title: "Architecture Scoring",
-    body: "Deterministic quality scores calculated from your pattern, scale, industry and priority.",
-  },
-  {
     icon: PiggyBank,
     title: "Cost Optimization",
     body: "Estimate monthly cloud spend per component and surface concrete savings opportunities.",
@@ -95,18 +93,15 @@ function Landing() {
   const [authMode, setAuthMode] = React.useState<"login" | "signup">("login");
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-background text-foreground">
-      {/* ambient gradient field */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[820px] opacity-70"
-        style={{
-          background:
-            "radial-gradient(60% 55% at 20% 0%, color-mix(in oklab, var(--primary) 26%, transparent), transparent 70%), radial-gradient(50% 45% at 85% 10%, color-mix(in oklab, var(--info) 22%, transparent), transparent 72%)",
-        }}
-      />
+    <div className="home-page relative min-h-dvh overflow-x-hidden bg-background text-foreground">
+      <div className="home-ambient" aria-hidden>
+        <div className="home-grid" />
+        <span className="home-orb home-orb-one" />
+        <span className="home-orb home-orb-two" />
+        <span className="home-orb home-orb-three" />
+      </div>
 
-      <header className="relative z-30 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
+      <header className="home-reveal is-visible relative z-30 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
         <div className="flex min-w-0 items-center gap-2.5">
           <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-12 w-auto object-contain" />
           <span className="truncate text-base font-semibold tracking-tight">ArchGuard AI</span>
@@ -163,13 +158,14 @@ function Landing() {
       </header>
 
       <main className="relative z-10">
-        <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-0 -mt-2 lg:-mt-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-0">
+        <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-4 lg:-mt-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-0">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-[12px] font-medium text-muted-foreground backdrop-blur">
+            <span className="home-reveal is-visible home-reveal-delay-1 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground shadow-sm backdrop-blur-xl">
+              <span className="home-live-dot" />
               <Sparkles className="size-3.5 text-primary" />
-              Rule engine decides. AI explains.
+              Rule engine decides · AI explains
             </span>
-            <h1 className="mt-5 text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
+            <h1 className="home-reveal is-visible home-reveal-delay-2 mt-5 max-w-3xl text-3xl font-semibold leading-[1.08] tracking-[-0.04em] sm:text-4xl lg:text-[3.25rem]">
               Design Better.
               <br />
               <span
@@ -182,15 +178,15 @@ function Landing() {
                 Build Safer. Scale Smarter.
               </span>
             </h1>
-            <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+            <p className="home-reveal is-visible home-reveal-delay-3 mt-6 max-w-xl text-[15px] leading-7 text-muted-foreground sm:text-base">
               An intelligent architecture design and security review platform that helps software
               engineers design, analyze, optimize and understand modern cloud architectures across
               AWS, Azure and Google Cloud.
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="home-reveal is-visible home-reveal-delay-4 mt-8 flex flex-wrap items-center gap-3">
               <Link
                 to="/designer"
-                className="group inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:-translate-y-0.5"
+                className="home-primary-button group inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:-translate-y-0.5"
                 style={{
                   backgroundImage:
                     "linear-gradient(100deg, var(--primary), color-mix(in oklab, var(--info) 65%, var(--primary)))",
@@ -201,12 +197,12 @@ function Landing() {
               </Link>
               <Link
                 to="/knowledge"
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/60 px-5 py-3 text-sm font-medium backdrop-blur transition-colors hover:bg-accent"
+                className="home-secondary-button inline-flex items-center gap-2 rounded-xl border border-border bg-card/60 px-5 py-3 text-sm font-medium backdrop-blur transition-colors hover:bg-accent"
               >
                 <BookOpen className="size-4" /> Explore Knowledge Hub
               </Link>
             </div>
-            <dl className="mt-10 grid max-w-lg grid-cols-3 gap-4">
+            <dl className="home-reveal is-visible home-reveal-delay-5 mt-10 grid max-w-lg grid-cols-3 gap-2 sm:gap-4">
               {[
                 ["6", "Score categories"],
                 ["3", "Cloud providers"],
@@ -214,7 +210,7 @@ function Landing() {
               ].map(([v, k]) => (
                 <div
                   key={k}
-                  className="rounded-xl border border-border bg-card/50 p-3 backdrop-blur"
+                  className="home-stat rounded-xl border border-border bg-card/50 p-3 backdrop-blur"
                 >
                   <dt className="text-lg font-semibold tracking-tight">{v}</dt>
                   <dd className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -225,33 +221,37 @@ function Landing() {
             </dl>
           </div>
 
-          <FlowVisual />
+          <Reveal><FlowVisual /></Reveal>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 pb-24">
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Everything you need to defend an architecture
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            From the first component you drop on the canvas to the final review report.
-          </p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <article
-                key={f.title}
-                className="group rounded-2xl border border-border bg-card/60 p-5 backdrop-blur transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl"
-              >
-                <div className="grid size-10 place-items-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/25">
-                  <f.icon className="size-5" />
+        <section className="mx-auto max-w-6xl px-5 pb-20">
+          <Reveal>
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary"><Activity className="size-3.5" /> Built for clarity</div>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Everything you need to defend an architecture</h2>
+              </div>
+              <p className="max-w-sm text-sm leading-6 text-muted-foreground">From the first component you drop on the canvas to the final review report.</p>
+            </div>
+          </Reveal>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map((f, index) => (
+              <Reveal key={f.title} className={`home-reveal-delay-${Math.min(index + 1, 5)}`}>
+                <article className="home-feature-card group rounded-xl border border-border bg-card/60 p-4 backdrop-blur transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl">
+                <div className="grid size-9 place-items-center rounded-lg bg-primary/12 text-primary ring-1 ring-primary/25">
+                  <f.icon className="size-4.5" />
                 </div>
-                <h3 className="mt-4 text-[15px] font-semibold tracking-tight">{f.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{f.body}</p>
-              </article>
+                <h3 className="mt-3 text-sm font-semibold tracking-tight">{f.title}</h3>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{f.body}</p>
+                <div className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-primary transition-transform duration-200 group-hover:translate-x-0.5">Explore capability <ArrowUpRight className="size-3" /></div>
+                </article>
+              </Reveal>
             ))}
           </div>
 
+          <Reveal>
           <div
-            className="mt-14 overflow-hidden rounded-3xl border border-border p-8 text-center backdrop-blur sm:p-12"
+            className="home-cta mt-14 overflow-hidden rounded-3xl border border-primary/20 p-8 text-center backdrop-blur sm:p-12"
             style={{
               backgroundImage:
                 "linear-gradient(120deg, color-mix(in oklab, var(--primary) 14%, transparent), color-mix(in oklab, var(--info) 12%, transparent))",
@@ -270,6 +270,7 @@ function Landing() {
               Start Designing <ArrowRight className="size-4" />
             </Link>
           </div>
+          </Reveal>
         </section>
       </main>
 
@@ -317,9 +318,32 @@ function Landing() {
   );
 }
 
+function Reveal({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { threshold: 0.12, rootMargin: "0px 0px -36px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={ref} className={`home-reveal ${visible ? "is-visible" : ""} ${className}`}>{children}</div>;
+}
+
 function FlowVisual() {
   return (
-    <div className="relative mx-auto w-full max-w-[340px] pt-10 lg:max-w-[380px] lg:pt-16">
+    <div className="home-flow-visual relative mx-auto w-full max-w-[310px] pt-6 lg:max-w-[350px] lg:pt-10">
       <div
         aria-hidden
         className="absolute -inset-6 rounded-[36px] opacity-60 blur-2xl"
@@ -328,35 +352,40 @@ function FlowVisual() {
             "linear-gradient(140deg, color-mix(in oklab, var(--primary) 30%, transparent), transparent 60%)",
         }}
       />
-      <div className="relative rounded-3xl border border-border bg-card/60 p-5 backdrop-blur-xl sm:p-6">
+      <div className="home-flow-card relative rounded-3xl border border-border bg-card/60 p-4 backdrop-blur-xl sm:p-5">
         <div className="mb-4 flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Reference request flow
-          </span>
-          <span className="flex gap-1.5">
-            {["var(--destructive)", "var(--warning)", "var(--success)"].map((c) => (
-              <span key={c} className="size-2 rounded-full" style={{ background: c }} />
-            ))}
-          </span>
+          <div>
+            <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <Activity className="size-3 text-primary" /> Reference request flow
+            </span>
+            <span className="mt-1 block text-[10px] text-muted-foreground/70">Production path · synchronous request</span>
+          </div>
+          <span className="home-trace-status"><span className="home-live-dot" /> LIVE TRACE</span>
         </div>
-        <ol className="space-y-2">
+        <ol className="home-flow-list relative space-y-1.5">
+          <span className="home-flow-rail" aria-hidden />
           {FLOW.map((step, i) => (
             <li key={step.label}>
               <div
-                className="flex items-center gap-3 rounded-xl border border-border/70 bg-background/60 px-3 py-2.5"
-                style={{ animation: `archflow-pulse 3.6s ease-in-out ${i * 0.28}s infinite` }}
+                className="home-flow-step archflow-pulse group relative z-[1] flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5"
+                style={{ animationDelay: `${i * 0.28}s` }}
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
-                  <step.icon className="size-4" />
+                <span className="home-flow-icon grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary transition-transform group-hover:scale-110">
+                  <step.icon className="size-3.5" />
                 </span>
-                <span className="truncate text-[13px] font-medium">{step.label}</span>
+                <span className="truncate text-xs font-medium">{step.label}</span>
+                <span className="ml-auto rounded-md bg-slate-200 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wider text-slate-950">{String(i + 1).padStart(2, "0")}</span>
               </div>
               {i < FLOW.length - 1 ? (
-                <span className="mx-auto my-0.5 block h-3 w-px bg-primary/40" aria-hidden />
+                <span className="mx-auto my-0.5 block h-2 w-px bg-primary/40" aria-hidden />
               ) : null}
             </li>
           ))}
         </ol>
+        <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3 text-emerald-500" /> Flow validated</span>
+          <span className="flex items-center gap-2"><span className="font-medium text-primary">8 components</span><span className="text-muted-foreground/50">·</span><span>42ms avg</span></span>
+        </div>
       </div>
     </div>
   );

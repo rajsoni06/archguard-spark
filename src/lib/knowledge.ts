@@ -42,7 +42,7 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
         "microservices",
         "Microservices & the API Gateway",
         "Why service decomposition needs a single, governed entry point.",
-        6,
+        8,
         [
           {
             heading: "What it is",
@@ -65,13 +65,28 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
               "Below roughly 100K users a well-structured modular monolith is usually cheaper and faster to operate.",
             ],
           },
+          {
+            heading: "Design checklist",
+            body: [
+              "Give each service one clear business capability, an owner, an API contract, and an explicit data ownership boundary.",
+              "Keep synchronous calls short and intentional. Push long-running work to a queue and make consumers idempotent.",
+              "Define timeouts, retry budgets, health checks, and distributed tracing before the first production incident.",
+            ],
+          },
+          {
+            heading: "Common failure mode",
+            body: [
+              "A distributed monolith has many services but still requires every service to deploy and release together.",
+              "If a service cannot be changed, tested, or operated independently, splitting it out may have added network cost without adding autonomy.",
+            ],
+          },
         ],
       ),
       a(
         "event-driven",
         "Event-Driven Architecture",
         "Decoupling producers from consumers using events.",
-        5,
+        7,
         [
           {
             heading: "Core idea",
@@ -85,6 +100,184 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
             body: [
               "You gain resilience and elasticity, and you pay with eventual consistency and harder debugging.",
               "Distributed tracing and a dead-letter queue are not optional in this style.",
+            ],
+          },
+          {
+            heading: "Delivery semantics",
+            body: [
+              "At-most-once delivery can lose messages, while at-least-once delivery can deliver duplicates. Most production systems choose at-least-once and make consumers idempotent.",
+              "Exactly-once behavior is usually achieved at the business level with deduplication keys, transactional state changes, and careful replay handling.",
+            ],
+          },
+          {
+            heading: "Operational checklist",
+            body: [
+              "Version event schemas, publish correlation IDs, monitor consumer lag, and alert on dead-letter queue depth.",
+              "Document which events are facts, which consumers are allowed to react, and how a failed event is safely replayed.",
+            ],
+          },
+        ],
+      ),
+      a(
+        "modular-monolith",
+        "Modular Monolith",
+        "A disciplined starting point that keeps deployment simple while preserving clear boundaries.",
+        7,
+        [
+          {
+            heading: "The shape",
+            body: [
+              "A modular monolith is one deployable application split into explicit business modules with private data access and stable contracts.",
+              "It gives a team local reasoning and low operational overhead without forcing every boundary to become a network call.",
+            ],
+          },
+          {
+            heading: "When it wins",
+            body: [
+              "Choose it when the domain is still changing, the team is small, or independent scaling is not yet a real requirement.",
+              "Keep module boundaries strong so a future extraction is a choice, not a rescue project.",
+            ],
+          },
+          {
+            heading: "Boundary rules",
+            body: [
+              "Modules communicate through application services or domain events instead of reaching directly into another module's tables.",
+              "Keep a dependency test in CI so new imports cannot silently create cycles or bypass the public module API.",
+            ],
+          },
+          {
+            heading: "Migration path",
+            body: [
+              "Measure real coupling before extracting anything. Start by moving a module behind a stable interface, then separate its data and deployment only when the operational benefit is clear.",
+            ],
+          },
+        ],
+      ),
+      a(
+        "cqrs",
+        "CQRS: Separate Reads and Writes",
+        "Use different models when read and write workloads have different needs.",
+        8,
+        [
+          {
+            heading: "Core idea",
+            body: [
+              "Command Query Responsibility Segregation keeps state-changing commands separate from read-optimised queries.",
+              "The read model can be denormalised and indexed for the product experience while the write model protects domain invariants.",
+            ],
+          },
+          {
+            heading: "Trade-offs",
+            body: [
+              "CQRS can improve performance and clarity, but it introduces projection lag, more storage, and operational complexity.",
+              "Start with one model unless the workload or domain rules justify the split.",
+            ],
+          },
+          {
+            heading: "Projection design",
+            body: [
+              "Build read projections from durable domain events or a change stream, and make projection handlers safe to restart from a checkpoint.",
+              "Expose projection freshness when stale data could surprise users, especially for balances, inventory, and permissions.",
+            ],
+          },
+          {
+            heading: "Good use cases",
+            body: [
+              "CQRS is useful when dashboards need many read shapes, when writes require complex invariants, or when reads and writes scale independently.",
+              "It is not a synonym for event sourcing: CQRS can use ordinary transactions and a shared database when that is the simpler choice.",
+            ],
+          },
+        ],
+      ),
+      a(
+        "clean-architecture",
+        "Clean Architecture",
+        "Keep business rules independent from frameworks, databases, and delivery mechanisms.",
+        7,
+        [
+          {
+            heading: "Dependency direction",
+            body: [
+              "Dependencies point inward toward policies and use cases; infrastructure depends on the application core, never the reverse.",
+              "This makes the core easier to test and keeps vendor choices at the edge of the system.",
+            ],
+          },
+          {
+            heading: "Practical test",
+            body: ["If a unit test needs a database or HTTP server to verify a business rule, the boundary is probably in the wrong place."],
+          },
+          {
+            heading: "Layers that matter",
+            body: [
+              "Keep entities and use cases at the centre, adapters around them, and infrastructure implementations at the outer edge.",
+              "Dependency inversion means the core defines the interface it needs; a database adapter implements that interface.",
+            ],
+          },
+          {
+            heading: "Avoid over-engineering",
+            body: ["Clean Architecture is a dependency rule, not a requirement to create dozens of folders. Use the smallest number of boundaries that keep business decisions independent."],
+          },
+        ],
+      ),
+      a(
+        "serverless-patterns",
+        "Serverless Architecture",
+        "Trade infrastructure management for event-driven execution and usage-based cost.",
+        7,
+        [
+          {
+            heading: "Best fit",
+            body: [
+              "Serverless works well for bursty APIs, scheduled jobs, event consumers, and workloads with clear execution boundaries.",
+              "Pair functions with managed queues, object storage, and observability rather than rebuilding platform services yourself.",
+            ],
+          },
+          {
+            heading: "Watch-outs",
+            body: ["Cold starts, execution limits, vendor coupling, and distributed debugging need explicit design decisions."],
+          },
+          {
+            heading: "Reliable function design",
+            body: [
+              "Keep handlers small, validate input at the boundary, make retries safe, and send long work to a durable queue instead of extending request timeouts.",
+              "Use correlation IDs and structured logs because one user request may cross several short-lived functions.",
+            ],
+          },
+          {
+            heading: "Cost model",
+            body: ["Serverless is inexpensive when execution is intermittent, but sustained high throughput can make reserved containers or dedicated compute more predictable. Model both idle and peak cost before committing."],
+          },
+        ],
+      ),
+      a(
+        "distributed-systems-basics",
+        "Distributed Systems Fundamentals",
+        "Reason about time, failure, consistency, and coordination across machines.",
+        9,
+        [
+          {
+            heading: "The hard parts",
+            body: [
+              "Networks fail, clocks disagree, messages arrive late or twice, and a healthy service can be unreachable from another healthy service.",
+              "Design with timeouts, retries, idempotency, back-pressure, and clear ownership of state.",
+            ],
+          },
+          {
+            heading: "Consistency is a product choice",
+            body: ["Choose strong consistency only where users or business rules require it; use eventual consistency deliberately where it buys resilience and scale."],
+          },
+          {
+            heading: "Failure-aware communication",
+            body: [
+              "Every remote call needs a timeout shorter than the caller's deadline. Retries need exponential backoff, jitter, and a maximum attempt budget.",
+              "Circuit breakers, bulkheads, and back-pressure stop one unhealthy dependency from consuming every worker thread or connection.",
+            ],
+          },
+          {
+            heading: "A practical review",
+            body: [
+              "Trace the critical request across services and ask what happens when each dependency is slow, unavailable, duplicated, or only partially updated.",
+              "Then identify the source of truth, the recovery action, and the user-visible behavior for every failure case.",
             ],
           },
         ],
@@ -969,4 +1162,85 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
 
 export const ALL_ARTICLES: Article[] = KNOWLEDGE.flatMap((c) => c.articles);
 
-export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);
+export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);
+
+export interface LearningPathGuide {
+  id: string;
+  definition: string;
+  contents: string[];
+}
+
+export const LEARNING_PATH: LearningPathGuide[] = [
+  {
+    id: "patterns",
+    definition: "System design patterns are reusable ways to organize software components and the communication between them. They give you a vocabulary for common problems such as scaling traffic, isolating failures, processing work asynchronously, or keeping code easy to change. A pattern is a starting point, not a rule: choose it only after understanding the workload, team size, reliability needs, and operational cost it introduces.",
+    contents: ["Client-Server Architecture", "Layered Architecture", "Microservices Architecture", "Monolithic Architecture", "Event-Driven Architecture", "Service-Oriented Architecture (SOA)", "CQRS", "Event Sourcing", "Saga Pattern", "Circuit Breaker Pattern", "Retry Pattern", "Bulkhead Pattern", "Strangler Fig Pattern", "API Gateway Pattern", "Sidecar Pattern", "Pub/Sub Pattern", "Load Balancing Pattern", "Cache-Aside Pattern", "Database-per-Service Pattern", "Leader-Follower Architecture"],
+  },
+  {
+    id: "scalability",
+    definition: "Scalability is a system's ability to keep serving users as traffic, data, or workload increases. Vertical scaling makes one machine larger, while horizontal scaling adds more machines or service instances; most large systems use a combination of both. Good scaling design begins by finding bottlenecks, separating stateless work from stateful storage, and measuring how cost and latency change as demand grows.",
+    contents: ["Vertical Scaling", "Horizontal Scaling", "Auto Scaling", "Load Balancing", "Stateless Services", "Distributed Systems", "Database Scaling", "Read Replicas", "Database Sharding", "Partitioning", "Caching", "CDN", "Asynchronous Processing", "Message Queues", "Service Decomposition", "Microservices", "Distributed Caching", "Connection Pooling", "Rate Limiting", "Capacity Planning"],
+  },
+  {
+    id: "reliability",
+    definition: "Reliability means a system continues to provide correct behavior over time, including when machines, networks, dependencies, or deployments fail. It includes detection, isolation, graceful degradation, recovery, and data protection—not just keeping servers running. Beginners should learn to ask what can fail, how users will experience that failure, and how the system will recover without creating duplicate work or data loss.",
+    contents: ["Fault Tolerance", "High Availability", "Redundancy", "Replication", "Failover", "Health Checks", "Heartbeats", "Disaster Recovery", "Backup and Restore", "Multi-AZ Deployment", "Multi-Region Architecture", "Automatic Recovery", "Retry Mechanisms", "Circuit Breakers", "Bulkheads", "Graceful Degradation", "Failure Detection", "Data Durability", "RPO", "RTO", "Chaos Engineering"],
+  },
+  {
+    id: "security",
+    definition: "Security is the practice of protecting identities, applications, infrastructure, and data from unauthorized actions and accidental exposure. A secure design verifies who a caller is, what they are allowed to do, where sensitive data can travel, and how suspicious activity is detected. Security is layered: authentication, authorization, network boundaries, encryption, secrets management, validation, patching, and audit trails work together rather than replacing one another.",
+    contents: ["Authentication", "Authorization", "IAM", "OAuth 2.0", "OpenID Connect", "JWT", "Session Management", "RBAC", "Encryption at Rest", "Encryption in Transit", "TLS/SSL", "Password Hashing", "API Security", "Rate Limiting", "Input Validation", "SQL Injection Prevention", "XSS Prevention", "CSRF Protection", "Secrets Management", "Network Security", "Firewalls", "WAF", "Zero Trust Architecture", "Security Logging", "Auditing", "Data Privacy"],
+  },
+  {
+    id: "cloud",
+    definition: "Cloud architecture uses provider-managed computing, storage, networking, databases, and security services to build systems without owning physical infrastructure. The cloud offers elasticity and powerful building blocks, but each managed service has limits, pricing rules, and provider-specific behavior. A sound design chooses the simplest service that meets the workload's needs and makes regions, identity, networking, backups, observability, and cost visible from the beginning.",
+    contents: ["IaaS", "PaaS", "SaaS", "Public Cloud", "Private Cloud", "Hybrid Cloud", "Multi-Cloud", "Regions", "Availability Zones", "Virtual Machines", "Containers", "Kubernetes", "Serverless Computing", "Object Storage", "Cloud Databases", "Managed Services", "VPC", "Load Balancers", "CDN", "Cloud Monitoring", "IAM", "Auto Scaling", "Infrastructure as Code", "Cloud Deployment Models"],
+  },
+  {
+    id: "performance",
+    definition: "Performance describes how quickly and efficiently a system responds while handling its expected workload. Latency is how long one request takes, throughput is how much work the system handles over time, and resource efficiency describes the CPU, memory, network, and storage used to do that work. Improve performance by measuring real bottlenecks first, then use caching, indexing, batching, asynchronous work, connection pooling, or additional capacity where the evidence supports it.",
+    contents: ["Latency", "Throughput", "Response Time", "RPS", "QPS", "CPU and Memory Optimization", "Database Optimization", "Indexing", "Query Optimization", "Caching", "CDN", "Connection Pooling", "Compression", "Pagination", "Asynchronous Processing", "Batch Processing", "Load Balancing", "Performance Testing", "Profiling", "Bottleneck Identification", "Horizontal Scaling", "Performance Monitoring"],
+  },
+  {
+    id: "cost",
+    definition: "Cost optimization is the discipline of meeting reliability, performance, and growth goals without paying for unnecessary capacity or complexity. Cloud cost comes from compute time, storage, requests, databases, data transfer, observability, and the people needed to operate the system. The cheapest component is not always the best choice: compare total cost, idle capacity, failure impact, engineering effort, and the cost of changing the decision later.",
+    contents: ["Resource Right-Sizing", "Auto Scaling", "Reserved Instances", "Savings Plans", "Spot Instances", "Serverless", "Storage Optimization", "Data Transfer Costs", "CDN Optimization", "Database Cost Optimization", "Caching", "Resource Scheduling", "Cloud Usage Monitoring", "Unused Resource Cleanup", "Cost Allocation", "Budget Alerts", "Capacity Planning", "Cost-vs-Performance Trade-offs"],
+  },
+  {
+    id: "observability",
+    definition: "Observability lets engineers understand what a system is doing from its outputs: logs describe events, metrics show trends and quantities, and traces follow one request across services. It turns a vague report such as 'the site is slow' into evidence about which dependency, query, or queue is responsible. Useful observability also defines service-level indicators, alerts on user impact, preserves correlation IDs, and avoids collecting sensitive data unnecessarily.",
+    contents: ["Logs", "Metrics", "Traces", "Distributed Tracing", "Structured Logging", "APM", "Health Checks", "Alerts", "Dashboards", "Error Tracking", "Request Correlation IDs", "SLIs", "SLOs", "SLAs", "Monitoring", "Prometheus", "Grafana", "OpenTelemetry", "Log Aggregation", "Alert Management", "Root Cause Analysis"],
+  },
+  {
+    id: "interview",
+    definition: "System design interviews and real architecture work both require turning an ambiguous product idea into explicit requirements and an explainable design. You estimate traffic, storage, bandwidth, and peak behavior; define APIs and data ownership; then choose components that satisfy reliability, security, latency, and cost goals. The important skill is not naming many technologies—it is explaining assumptions, bottlenecks, failure modes, and trade-offs clearly.",
+    contents: ["Functional Requirements", "Non-Functional Requirements", "Capacity Estimation", "Traffic Estimation", "Storage Estimation", "API Design", "Database Selection", "High-Level Design", "Low-Level Design", "Scalability", "Reliability", "Security", "Caching", "Load Balancing", "Message Queues", "CAP Theorem", "Consistency Models", "Distributed Systems", "Trade-offs", "Bottleneck Identification", "Failure Scenarios", "Architecture Diagrams", "Communication Strategy"],
+  },
+  {
+    id: "databases",
+    definition: "Database design starts with the data and the queries the product must support, not with a fashionable database brand. Relational databases are strong at structured relationships and transactions; document, key-value, wide-column, and graph stores optimize different access patterns. Decide how data is indexed, partitioned, replicated, backed up, and migrated, and make consistency choices explicit so the application does not accidentally show stale or conflicting results.",
+    contents: ["SQL vs NoSQL", "Relational Databases", "Document Databases", "Key-Value Stores", "Wide-Column Databases", "Graph Databases", "ACID Transactions", "BASE", "CAP Theorem", "Database Indexing", "Normalization", "Denormalization", "Replication", "Read Replicas", "Sharding", "Partitioning", "Consistency", "Transactions", "Distributed Databases", "Data Modeling", "Query Optimization", "Polyglot Persistence"],
+  },
+  {
+    id: "distributed-systems",
+    definition: "A distributed system is made of independent computers or services that coordinate over a network to behave like one product. Networks can be slow, disconnected, duplicated, or partially failed, so a distributed design must handle timeouts, retries, ordering, consistency, idempotency, and membership changes. Distribution can improve scale and availability, but it also adds coordination and debugging complexity; use it when the benefit justifies that cost.",
+    contents: ["Distributed Computing", "CAP Theorem", "Consistency Models", "Strong Consistency", "Eventual Consistency", "Distributed Transactions", "Consensus", "Leader Election", "Replication", "Partitioning", "Sharding", "Distributed Locks", "Message Queues", "Pub/Sub", "Service Discovery", "Clock Synchronization", "Idempotency", "Fault Tolerance", "Network Partitions", "Raft/Paxos", "Exactly-Once Processing", "At-Least-Once Processing", "At-Most-Once Processing"],
+  },
+  {
+    id: "templates",
+    definition: "Architecture templates are proven high-level shapes such as a three-tier application, modular monolith, microservices platform, or event-driven pipeline. They help beginners see where clients, gateways, business logic, queues, databases, and operational controls usually fit. Treat a template as a map to adapt: the right structure depends on domain boundaries, traffic shape, team ownership, failure tolerance, and how much operational work the team can support.",
+    contents: ["Monolithic Architecture", "Layered Architecture", "Three-Tier Architecture", "Microservices Architecture", "Event-Driven Architecture", "Serverless Architecture", "Hexagonal Architecture", "Clean Architecture", "CQRS Architecture", "Event-Sourcing Architecture", "Pipeline Architecture", "Client-Server Architecture", "Peer-to-Peer Architecture", "Leader-Follower Architecture", "Multi-Region Architecture"],
+  },
+  {
+    id: "comparisons",
+    definition: "Architecture comparisons make trade-offs visible when two technically valid choices solve the same problem. For example, a monolith may be faster to build and operate, while microservices can provide independent scaling at the cost of networking and deployment complexity. Compare options using the same workload assumptions, then consider failure behavior, team capability, migration effort, vendor dependence, and the consequences of being wrong.",
+    contents: ["Monolith vs Microservices", "SQL vs NoSQL", "Vertical vs Horizontal Scaling", "REST vs GraphQL", "REST vs gRPC", "Synchronous vs Asynchronous Communication", "Message Queue vs Pub/Sub", "SQL vs Document Database", "Cache vs Database", "CDN vs Reverse Proxy", "Serverless vs Containers", "Kubernetes vs Virtual Machines", "Strong vs Eventual Consistency", "Single-Region vs Multi-Region", "Shared Database vs Database-per-Service"],
+  },
+  {
+    id: "capacity",
+    definition: "Capacity planning uses rough but explicit calculations to estimate requests, concurrent users, storage growth, bandwidth, peak traffic, and resource needs before implementation. Start with business assumptions such as users, actions per user, payload size, and read/write ratio, then include peak multipliers and safety headroom. Estimates are not promises; they are a way to expose bottlenecks early and decide what must be measured in a load test.",
+    contents: ["RPS Estimation", "Storage Estimation", "Bandwidth", "Database Sizing", "Back-of-Envelope Calculations", "Peak Traffic", "Read/Write Ratios", "Latency Budgets", "Growth Modeling", "Capacity Buffers"],
+  },
+];
+
+export const RECOMMENDED_LEARNING_ORDER = ["Architecture Basics", "Scalability", "Databases", "Caching", "Load Balancing", "Distributed Systems", "Reliability", "Performance", "Security", "Messaging/Event-Driven Systems", "Cloud", "Observability", "Cost Optimization", "Architecture Comparisons", "Interview Problems"];

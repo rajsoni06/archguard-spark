@@ -13,11 +13,15 @@ import {
   ShieldCheck,
   Users,
   Workflow,
+  LogIn,
+  UserPlus,
+  CircleUserRound,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import AuthDialog from "@/components/ui/auth-modal";
 
 const NAV = [
   { to: "/", label: "Home", icon: Home },
@@ -30,11 +34,20 @@ const NAV = [
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/team", label: "Team Collaboration", icon: Users },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/profile", label: "Profile", icon: CircleUserRound },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authOpen, setAuthOpen] = useState(false);
+
+  const openAuth = (mode: "login" | "signup") => {
+    setAuthMode(mode);
+    setAuthOpen(true);
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
@@ -50,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
-          {NAV.map((item) => {
+          {NAV.filter((item) => item.to !== "/profile" || Boolean(user)).map((item) => {
             const active = pathname === item.to;
             return (
               <Link
@@ -68,6 +81,34 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => openAuth("login")}
+            aria-current={authOpen && authMode === "login" ? "page" : undefined}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+              authOpen && authMode === "login"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
+                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            )}
+          >
+            <LogIn className={cn("size-4", authOpen && authMode === "login" && "text-primary")} />
+            Login
+          </button>
+          <button
+            type="button"
+            onClick={() => openAuth("signup")}
+            aria-current={authOpen && authMode === "signup" ? "page" : undefined}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+              authOpen && authMode === "signup"
+                ? "bg-primary/12 text-primary shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
+                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            )}
+          >
+            <UserPlus className={cn("size-4", authOpen && authMode === "signup" && "text-primary")} />
+            Sign Up
+          </button>
         </nav>
 
         <div className="px-2 pb-2">
@@ -95,6 +136,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AuthStatus />
         {children}
       </main>
+
+      <AuthDialog open={authOpen} mode={authMode} onOpenChange={setAuthOpen} />
     </div>
   );
 }

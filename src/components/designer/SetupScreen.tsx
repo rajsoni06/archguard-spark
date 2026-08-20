@@ -72,7 +72,7 @@ export function SetupScreen({
                 aria-checked={active}
                 onClick={() => setCloud(id)}
                 className={cn(
-                  "group relative flex items-center gap-4 rounded-xl border bg-card p-5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                  "group relative flex items-center gap-3 rounded-xl border bg-card p-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   active
                     ? "border-primary ring-2 ring-primary/25 shadow-md"
                     : "border-border hover:border-primary/50 hover:shadow-sm",
@@ -94,11 +94,11 @@ export function SetupScreen({
                 </span>
 
                 {id === "aws" ? (
-                  <img src="/AWS-Logo.png" alt="AWS Logo" className="h-20 w-20 object-contain shrink-0" />
+                  <img src="/AWS-Logo.png" alt="AWS Logo" className="h-16 w-16 object-contain shrink-0" />
                 ) : id === "azure" ? (
-                  <img src="/Azure_Logo.png" alt="Azure Logo" className="h-28 w-28 object-contain shrink-0" />
+                  <img src="/Azure_Logo.png" alt="Azure Logo" className="h-20 w-20 object-contain shrink-0" />
                 ) : id === "gcp" ? (
-                  <img src="/Google_Cloud_Logo.png" alt="GCP Logo" className="h-20 w-20 object-contain shrink-0" />
+                  <img src="/Google_Cloud_Logo.png" alt="GCP Logo" className="h-16 w-16 object-contain shrink-0" />
                 ) : (
                   <span
                     className="flex size-11 shrink-0 items-center justify-center rounded-lg"

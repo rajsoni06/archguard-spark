@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, Layers, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { BOUNDARY_KINDS, CLOUDS, type CloudId, type ServiceDef } from "@/lib/catalog";
+import { BOUNDARY_KINDS, CLOUDS, getBoundaryLabel, type CloudId, type ServiceDef } from "@/lib/catalog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -84,17 +84,18 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
             <div className="grid gap-1">
               {BOUNDARY_KINDS.map((b) => {
                 const Icon = b.icon;
+                const label = getBoundaryLabel(b.id, cloud);
                 return (
                   <button
                     key={b.id}
                     type="button"
-                    title={`Click to add ${b.label}`}
-                    onClick={() => onAdd({ kind: "boundary", id: b.id, label: b.label })}
+                    title={`Click to add ${label}`}
+                    onClick={() => onAdd({ kind: "boundary", id: b.id, label })}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData(
                         "application/archguard",
-                        JSON.stringify({ kind: "boundary", id: b.id, label: b.label }),
+                        JSON.stringify({ kind: "boundary", id: b.id, label }),
                       );
                       e.dataTransfer.effectAllowed = "move";
                     }}
@@ -102,7 +103,7 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: b.color }} />
-                      <span className="truncate">{b.label}</span>
+                      <span className="truncate">{label}</span>
                     </div>
                     <Icon 
                       className="size-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" 

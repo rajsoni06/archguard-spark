@@ -1,21 +1,36 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, BookOpen, Clock, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  BookOpen,
+  BookOpenText,
+  Clock,
+  Layers3,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KNOWLEDGE, findArticle } from "@/lib/knowledge";
+import {
+  KNOWLEDGE,
+  LEARNING_PATH,
+  RECOMMENDED_LEARNING_ORDER,
+  findArticle,
+  type LearningPathGuide,
+} from "@/lib/knowledge";
 import { cn } from "@/lib/utils";
 
 const TITLE = "Knowledge Hub — System Design & Cloud Architecture | ArchGuard AI";
 const DESCRIPTION =
-  "Learn scalability, reliability, security, cloud, performance and cost patterns — linked directly to the findings from your architecture review.";
+  "Learn scalability, reliability, security, cloud, performance and cost patterns linked directly to your architecture review findings.";
 
 export const Route = createFileRoute("/knowledge")({
   validateSearch: (search: Record<string, unknown>): { article?: string } =>
-    typeof search["article"] === "string" ? { article: search["article"] } : {},
+    typeof search.article === "string" ? { article: search.article } : {},
   head: () => ({
     meta: [
       { title: TITLE },
@@ -31,31 +46,30 @@ function KnowledgePage() {
   const { article } = Route.useSearch();
   const navigate = useNavigate({ from: "/knowledge" });
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>(KNOWLEDGE[0]!.id);
-
+  const [activeCategory, setActiveCategory] = useState(KNOWLEDGE[0]!.id);
   const open = article ? findArticle(article) : undefined;
-
   const categories = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return KNOWLEDGE;
-    return KNOWLEDGE.map((c) => ({
-      ...c,
-      topics: c.topics.filter((t) => t.toLowerCase().includes(q)),
-      articles: c.articles.filter(
-        (art) => art.title.toLowerCase().includes(q) || art.summary.toLowerCase().includes(q),
+    return KNOWLEDGE.map((category) => ({
+      ...category,
+      topics: category.topics.filter((topic) => topic.toLowerCase().includes(q)),
+      articles: category.articles.filter((item) =>
+        `${item.title} ${item.summary}`.toLowerCase().includes(q),
       ),
-    })).filter((c) => c.topics.length > 0 || c.articles.length > 0 || c.name.toLowerCase().includes(q));
+    })).filter(
+      (category) =>
+        category.topics.length ||
+        category.articles.length ||
+        category.name.toLowerCase().includes(q),
+    );
   }, [query]);
-
-  const current = categories.find((c) => c.id === activeCategory) ?? categories[0];
+  const current = categories.find((category) => category.id === activeCategory) ?? categories[0];
 
   return (
     <AppShell>
-      <PageHeader
-        title="Knowledge Hub"
-        subtitle="Design → Review → Learn → Improve"
-      >
-        <div className="relative w-90 lg:w-100">
+      <PageHeader title="Knowledge Hub" subtitle="Design → Review → Learn → Improve">
+        <div className="relative ml-auto w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
@@ -66,95 +80,310 @@ function KnowledgePage() {
           />
         </div>
       </PageHeader>
-
       {open ? (
-        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-          <article className="mx-auto max-w-4xl">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mb-4 -ml-2 text-muted-foreground"
-              onClick={() => navigate({ search: () => ({}) })}
+        <ArticleView article={open} onBack={() => navigate({ search: () => ({}) })} />
+      ) : (
+        <HubView
+          categories={categories}
+          current={current}
+          activeCategory={activeCategory}
+          onCategory={setActiveCategory}
+          onArticle={(slug) => navigate({ search: { article: slug } })}
+        />
+      )}
+    </AppShell>
+  );
+}
+
+function HubView({
+  categories,
+  current,
+  activeCategory,
+  onCategory,
+  onArticle,
+}: {
+  categories: typeof KNOWLEDGE;
+  current?: (typeof KNOWLEDGE)[number];
+  activeCategory: string;
+  onCategory: (id: string) => void;
+  onArticle: (slug: string) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+      <aside className="shrink-0 border-b border-border bg-card/50 p-3 lg:w-64 lg:border-b-0 lg:border-r lg:p-4">
+        <div className="mb-3 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <Layers3 className="size-3.5 text-primary" /> Learning paths
+        </div>
+        <nav className="flex gap-1 overflow-x-auto lg:grid lg:gap-1">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => onCategory(category.id)}
+              className={cn(
+                "group flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors lg:w-full",
+                activeCategory === category.id
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
             >
-              <ArrowLeft className="size-4" /> Back to Knowledge Hub
-            </Button>
-            <h2 className="text-2xl font-semibold tracking-tight">{open.title}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{open.summary}</p>
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="size-3.5" /> {open.readMinutes} min read
+              <span>{category.name}</span>
+              <span
+                className={cn(
+                  "ml-3 rounded-full px-1.5 py-0.5 text-[10px]",
+                  activeCategory === category.id
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                {category.articles.length}
+              </span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5">
+        {current ? <CategoryView category={current} onArticle={onArticle} /> : <EmptySearch />}
+      </main>
+    </div>
+  );
+}
+
+function CategoryView({
+  category,
+  onArticle,
+}: {
+  category: (typeof KNOWLEDGE)[number];
+  onArticle: (slug: string) => void;
+}) {
+  const [featured, ...articles] = category.articles;
+  const guide = LEARNING_PATH.find((item) => item.id === category.id);
+  return (
+    <div className="mx-auto max-w-6xl">
+      <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-4 sm:p-5">
+        <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-primary">
+            <Sparkles className="size-3.5" /> Knowledge path
+          </div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+            {category.name}
+          </h2>
+          <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+            {category.description}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {category.topics.map((topic) => (
+              <Badge
+                key={topic}
+                variant="outline"
+                className="border-border bg-background/60 px-2.5 py-1 text-[11px] text-muted-foreground"
+              >
+                {topic}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </section>
+      {guide ? <LearningGuide guide={guide} showOrder={category.id === "patterns"} /> : null}
+      {featured ? (
+        <button
+          type="button"
+          onClick={() => onArticle(featured.slug)}
+          className="group mt-4 grid w-full gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md sm:grid-cols-[1fr_auto] sm:p-5"
+        >
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+              <BookOpenText className="size-4" /> Start here
             </div>
-            <div className="mt-8 space-y-7">
-              {open.sections.map((section) => (
-                <section key={section.heading}>
-                  <h3 className="text-sm font-semibold text-primary">{section.heading}</h3>
+            <h3 className="mt-2 text-lg font-semibold tracking-tight group-hover:text-primary">
+              {featured.title}
+            </h3>
+            <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+              {featured.summary}
+            </p>
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="size-3.5" /> {featured.readMinutes} min read
+            </div>
+          </div>
+          <div className="flex size-11 items-center justify-center self-start rounded-full bg-primary/10 text-primary transition-transform group-hover:translate-x-1">
+            <ArrowUpRight className="size-5" />
+          </div>
+        </button>
+      ) : null}
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Continue learning
+          </p>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight">
+            More patterns and practical guidance
+          </h3>
+        </div>
+        <span className="text-xs text-muted-foreground">{category.articles.length} articles</span>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {articles.map((item, index) => (
+          <ArticleCard
+            key={item.slug}
+            article={item}
+            index={index}
+            onClick={() => onArticle(item.slug)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LearningGuide({ guide, showOrder }: { guide: LearningPathGuide; showOrder: boolean }) {
+  return (
+    <section className="mt-4 grid gap-3 lg:grid-cols-[0.85fr_1.15fr]">
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+          Definition
+        </div>
+        <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{guide.definition}</p>
+        {showOrder ? (
+          <div className="mt-4 border-t border-border pt-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Recommended interview order
+            </div>
+            <p className="mt-2 text-xs leading-6 text-muted-foreground">
+              {RECOMMENDED_LEARNING_ORDER.join(" → ")}
+            </p>
+          </div>
+        ) : null}
+      </div>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            Core contents
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {guide.contents.length} concepts
+          </span>
+        </div>
+        <div className="mt-3 flex max-h-40 flex-wrap content-start gap-1.5 overflow-y-auto pr-1">
+          {guide.contents.map((content) => (
+            <span
+              key={content}
+              className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground"
+            >
+              {content}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ArticleCard({
+  article,
+  index,
+  onClick,
+}: {
+  article: (typeof KNOWLEDGE)[number]["articles"][number];
+  index: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-primary">
+          <BookOpen className="size-4" />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">0{index + 2}</span>
+      </div>
+      <h4 className="mt-4 text-sm font-semibold leading-snug group-hover:text-primary">
+        {article.title}
+      </h4>
+      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+        {article.summary}
+      </p>
+      <div className="mt-4 flex items-center justify-between text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Clock className="size-3.5" /> {article.readMinutes} min read
+        </span>
+        <ArrowUpRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+      </div>
+    </button>
+  );
+}
+
+function ArticleView({
+  article,
+  onBack,
+}: {
+  article: NonNullable<ReturnType<typeof findArticle>>;
+  onBack: () => void;
+}) {
+  return (
+    <main className="flex-1 overflow-y-auto bg-muted/20 p-3 sm:p-4 lg:p-5">
+      <article className="mx-auto max-w-4xl">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-3 -ml-2 text-muted-foreground"
+          onClick={onBack}
+        >
+          <ArrowLeft className="size-4" /> Back to Knowledge Hub
+        </Button>
+        <header className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-primary">
+            <BookOpenText className="size-4" /> Architecture field note
+          </div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+            {article.title}
+          </h2>
+          <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-sm">
+            {article.summary}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Clock className="size-3.5" /> {article.readMinutes} min read{" "}
+            <span className="text-border">•</span> Practical guide
+          </div>
+        </header>
+        <div className="mt-4 space-y-3">
+          {article.sections.map((section, index) => (
+            <section
+              key={section.heading}
+              className="rounded-xl border border-border bg-card p-4 sm:p-5"
+            >
+              <div className="flex gap-3">
+                <span className="text-xs font-semibold text-primary">0{index + 1}</span>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold">{section.heading}</h3>
                   <div className="mt-2 space-y-2">
-                    {section.body.map((p) => (
-                      <p key={p} className="text-sm leading-relaxed text-muted-foreground">
-                        {p}
+                    {section.body.map((paragraph) => (
+                      <p key={paragraph} className="text-[13px] leading-6 text-muted-foreground">
+                        {paragraph}
                       </p>
                     ))}
                   </div>
-                </section>
-              ))}
-            </div>
-          </article>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          <nav className="w-64 shrink-0 space-y-1 overflow-y-auto border-r border-border p-3 lg:p-4">
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setActiveCategory(c.id)}
-                className={cn(
-                  "w-full rounded-md px-3 py-2 text-left text-[13px] transition-colors",
-                  current?.id === c.id
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                )}
-              >
-                {c.name}
-              </button>
-            ))}
-          </nav>
-
-          <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-            {current ? (
-              <div className="mx-auto max-w-6xl">
-                <h2 className="text-lg font-semibold tracking-tight">{current.name}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{current.description}</p>
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {current.topics.map((t) => (
-                    <Badge key={t} variant="outline" className="border-border text-muted-foreground">
-                      {t}
-                    </Badge>
-                  ))}
-                </div>
-
-                <div className="mt-6 grid gap-3 md:grid-cols-2">
-                  {current.articles.map((art) => (
-                    <button
-                      key={art.slug}
-                      onClick={() => navigate({ search: { article: art.slug } })}
-                      className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/50"
-                    >
-                      <div className="flex items-center gap-2 text-primary">
-                        <BookOpen className="size-4" />
-                        <span className="text-sm font-medium text-foreground">{art.title}</span>
-                      </div>
-                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{art.summary}</p>
-                      <div className="mt-3 text-[11px] text-muted-foreground">{art.readMinutes} min read</div>
-                    </button>
-                  ))}
                 </div>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No topics match that search.</p>
-            )}
-          </div>
+            </section>
+          ))}
         </div>
-      )}
-    </AppShell>
+      </article>
+    </main>
+  );
+}
+
+function EmptySearch() {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center">
+      <div className="text-center">
+        <Search className="mx-auto size-7 text-muted-foreground/50" />
+        <p className="mt-3 text-sm font-medium">No topics or articles found</p>
+        <p className="mt-1 text-xs text-muted-foreground">Try a broader search term.</p>
+      </div>
+    </div>
   );
 }

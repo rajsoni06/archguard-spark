@@ -83,4 +83,11 @@ export const PAGE_META: Record<string, PageMeta> = {
       { title: "Explanation detail", detail: "How verbose generated explanations are", badge: "Standard" },
     ],
   },
+  profile: {
+    title: "Profile — ArchGuard AI",
+    description: "View your ArchGuard AI account information and manage your session.",
+    heading: "Profile",
+    subtitle: "Your account and session details",
+    items: [],
+  },
 };

@@ -1,4 +1,5 @@
-import type { Capability, CloudId } from "./catalog";
+import { classifyBoundaryPlacement } from "./boundaryPolicy";
+import { findService, type Capability, type CloudId } from "./catalog";
 
 export interface ProjectContext {
   name: string;
@@ -93,9 +94,30 @@ const countCap = (g: ArchGraph, cap: Capability) =>
   g.nodes.filter((n) => n.caps.includes(cap)).length;
 const always = () => true;
 
+const hasDirectedPath = (g: ArchGraph, from: Capability[], to: Capability[]) => {
+  const sources = new Set(g.nodes.filter((n) => from.some((cap) => n.caps.includes(cap))).map((n) => n.id));
+  const targets = new Set(g.nodes.filter((n) => to.some((cap) => n.caps.includes(cap))).map((n) => n.id));
+  return g.edges.some((edge) => sources.has(edge.source) && targets.has(edge.target));
+};
+
+const hasTwoHopPath = (g: ArchGraph, first: Capability[], middle: Capability[], last: Capability[]) => {
+  const middleIds = new Set(g.nodes.filter((n) => middle.some((cap) => n.caps.includes(cap))).map((n) => n.id));
+  const firstIds = new Set(g.nodes.filter((n) => first.some((cap) => n.caps.includes(cap))).map((n) => n.id));
+  const lastIds = new Set(g.nodes.filter((n) => last.some((cap) => n.caps.includes(cap))).map((n) => n.id));
+  return g.edges.some((a) => firstIds.has(a.source) && middleIds.has(a.target)) &&
+    g.edges.some((b) => middleIds.has(b.source) && lastIds.has(b.target));
+};
+
 
 const inPrivate = (n: GraphNode) =>
   n.boundary === "private-subnet" || n.boundary === "database-layer";
+
+const boundaryPlacementForNode = (n: GraphNode, ctx: ProjectContext) => {
+  if (!n.boundary) return "Allowed" as const;
+  const svc = findService(ctx.cloud, n.serviceId);
+  if (!svc) return "Allowed" as const;
+  return classifyBoundaryPlacement(n.boundary as any, { id: svc.id, category: svc.category, caps: svc.caps }, ctx.cloud);
+};
 
 export const RULES: Rule[] = [
   // ---------------- Security ----------------
@@ -220,6 +242,40 @@ export const RULES: Rule[] = [
     applies: (c) => scaleRank(c.scale) >= 2,
     satisfied: (g) => countCap(g, "compute") >= 2 || has(g, "container"),
   },
+  {
+    id: "pattern-entry-compute-data",
+    category: "Scalability",
+    severity: "medium",
+    strength: "Entry traffic is routed through compute before reaching cache or data",
+    issue: "Entry, compute, and data tiers are not connected as a request path",
+    recommendation: "Connect API Gateway or a load balancer to compute, then connect compute to cache and/or a database.",
+    learn: "system-design-basics",
+    applies: always,
+    satisfied: (g) => {
+      const hasEntry = has(g, "api-gateway") || has(g, "load-balancer");
+      const hasRuntime = has(g, "compute") || has(g, "container") || has(g, "serverless");
+      const hasData = has(g, "database") || has(g, "cache");
+      return !(hasEntry && hasRuntime && hasData) ||
+        hasTwoHopPath(g, ["api-gateway", "load-balancer"], ["compute", "container", "serverless"], ["database", "cache"]);
+    },
+  },
+  {
+    id: "pattern-async-worker-data",
+    category: "Reliability",
+    severity: "medium",
+    strength: "Asynchronous work is delivered to a worker before persistence",
+    issue: "Queue/event traffic is not connected to a worker and durable data store",
+    recommendation: "Connect Queue, Pub/Sub, Event Bus, or streaming to a worker, then connect the worker to a database or object store.",
+    learn: "message-queues",
+    applies: always,
+    satisfied: (g) => {
+      const hasAsync = has(g, "queue") || has(g, "pubsub") || has(g, "event-bus") || has(g, "streaming");
+      const hasWorker = has(g, "compute") || has(g, "container") || has(g, "serverless");
+      const hasStore = has(g, "database") || has(g, "object-storage");
+      return !(hasAsync && hasWorker && hasStore) ||
+        hasTwoHopPath(g, ["queue", "pubsub", "event-bus", "streaming"], ["compute", "container", "serverless"], ["database", "object-storage"]);
+    },
+  },
   // ---------------- Availability ----------------
   {
     id: "avail-multi-az",
@@ -265,6 +321,23 @@ export const RULES: Rule[] = [
     learn: "message-queues",
     applies: (c) => ["Microservices", "Event-Driven", "Distributed System", "CQRS"].includes(c.pattern),
     satisfied: (g) => has(g, "queue") || has(g, "pubsub") || has(g, "streaming"),
+  },
+  {
+    id: "data-pipeline",
+    category: "Performance",
+    severity: "low",
+    strength: "Data pipeline connects ingestion, transformation, and analytical storage",
+    issue: "Analytics components are present without a recognizable data pipeline",
+    recommendation: "Connect streaming or source storage to ETL/stream processing, then to a data lake or warehouse.",
+    learn: "data-pipelines",
+    applies: always,
+    satisfied: (g) => {
+      const pipeline = has(g, "streaming") || has(g, "etl") || has(g, "data-lake") || has(g, "warehouse");
+      if (!pipeline) return true;
+      const processing = has(g, "etl") || has(g, "streaming");
+      const destination = has(g, "data-lake") || has(g, "warehouse");
+      return !(processing && destination) || hasDirectedPath(g, ["streaming", "etl", "object-storage"], ["data-lake", "warehouse", "database"]);
+    },
   },
   {
     id: "rel-health",
@@ -387,6 +460,46 @@ export const RULES: Rule[] = [
     recommendation: "Wrap the architecture in an explicit region boundary and pin data stores to it.",
     applies: (c) => ["Banking", "Healthcare", "Government"].includes(c.industry),
     satisfied: (g) => g.nodes.some((n) => n.boundary === "region"),
+  },
+  {
+    id: "boundaries-cloud-fit",
+    category: "Security",
+    severity: "medium",
+    strength: "Services sit in boundaries that match their cloud-native behavior",
+    issue: "Some services are nested in boundaries where they normally stay external",
+    recommendation:
+      "Move global edge, identity, CI/CD, and telemetry services outside the physical boundary and connect them logically instead. Keep only services that naturally belong inside the network container.",
+    applies: always,
+    satisfied: (g, ctx) => !g.nodes.some((n) => boundaryPlacementForNode(n, ctx) === "External"),
+  },
+  {
+    id: "cicd-runtime-separation",
+    category: "Reliability",
+    severity: "medium",
+    strength: "CI/CD remains separate from runtime traffic",
+    issue: "A DevOps service appears on the user request path",
+    recommendation:
+      "Keep GitHub Actions, Azure DevOps, and similar tools outside the runtime chain. Use them to deploy into App Service, VM, or Databricks targets instead of routing user traffic through them.",
+    applies: always,
+    satisfied: (g, ctx) => {
+      const devopsTargets = new Set(
+        g.nodes
+          .filter((n) => {
+            const svc = findService(ctx.cloud, n.serviceId);
+            return svc?.category === "DevOps";
+          })
+          .map((n) => n.id),
+      );
+      if (devopsTargets.size === 0) return true;
+
+      const entryCaps: Capability[] = ["client", "dns", "cdn", "waf", "load-balancer", "api-gateway"];
+      return !g.edges.some((e) => {
+        const source = g.nodes.find((n) => n.id === e.source);
+        const target = g.nodes.find((n) => n.id === e.target);
+        if (!source || !target) return false;
+        return devopsTargets.has(target.id) && source.caps.some((cap) => entryCaps.includes(cap));
+      });
+    },
   },
   // ---------------- Observability ----------------
   {
@@ -553,6 +666,7 @@ export interface AnalysisResult {
   evaluatedAt: string;
   nodeCount: number;
   edgeCount: number;
+  serviceNames: string[];
 }
 
 export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): AnalysisResult {
@@ -573,6 +687,7 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
       evaluatedAt: new Date().toISOString(),
       nodeCount: 0,
       edgeCount: graph.edges.length,
+      serviceNames: [],
     };
   }
 
@@ -629,6 +744,7 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
     evaluatedAt: new Date().toISOString(),
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
+    serviceNames: graph.nodes.map((node) => node.label),
   };
 }
 
@@ -642,26 +758,36 @@ export function explainAnalysis(result: AnalysisResult, ctx: ProjectContext): st
   }
   const scored = result.categories.filter((c) => c.score !== null);
   const worst = [...scored].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
-  const top = result.issues.slice(0, 3).map((i) => i.rule.issue.toLowerCase());
-  const list =
-    top.length === 0
-      ? "no blocking issues remain"
-      : top.length === 1
-        ? top[0]
-        : `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
-
-  const requirementsCtx: string[] = [];
-  if (ctx.availability && ctx.availability !== "99%") requirementsCtx.push(`${ctx.availability} availability`);
-  if (ctx.traffic && ctx.traffic !== "1K RPS") requirementsCtx.push(`${ctx.traffic} traffic`);
-  if (ctx.latency && ctx.latency !== "<1sec") requirementsCtx.push(`${ctx.latency} latency`);
-  const reqSuffix = requirementsCtx.length > 0 ? ` targeting ${requirementsCtx.join(", ")}` : "";
+  const services = result.serviceNames.length > 7
+    ? `${result.serviceNames.slice(0, 7).join(", ")} and ${result.serviceNames.length - 7} more`
+    : result.serviceNames.join(", ");
+  const requirements = `${ctx.traffic} traffic, ${ctx.availability} availability, ${ctx.latency} latency, and ${ctx.consistency.toLowerCase()} consistency`;
+  const topIssues = result.issues.slice(0, 2).map((i) => i.rule.issue.toLowerCase());
+  const issueSummary = topIssues.length === 0
+    ? "no major rule violations"
+    : topIssues.length === 1
+      ? topIssues[0]
+      : `${topIssues[0]} and ${topIssues[1]}`;
 
   return [
-    `Your ${ctx.pattern.toLowerCase()} design on ${ctx.cloud.toUpperCase()} scores ${result.overall}/100 (${result.maturity}) for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}${reqSuffix}.`,
-    `${worst?.category ?? "Security"} is the weakest dimension at ${worst?.score ?? 0}/100, driven mainly by ${list}.`,
+    `I reviewed your ${ctx.cloud.toUpperCase()} ${ctx.pattern.toLowerCase()} canvas for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}. It contains ${result.nodeCount} components (${services}) connected by ${result.edgeCount} relationship${result.edgeCount === 1 ? "" : "s"}, with requirements for ${requirements}.`,
+    `The architecture scores ${result.overall}/100 (${result.maturity}); ${worst?.category ?? "Security"} is the weakest area at ${worst?.score ?? 0}/100, mainly because of ${issueSummary}. ${result.issues[0] ? `My highest-impact recommendation is to ${result.issues[0].rule.recommendation.charAt(0).toLowerCase()}${result.issues[0].rule.recommendation.slice(1)}` : "The design has no major rule violations, so focus next on cost tuning and operational readiness."}`,
     result.issues[0]
-      ? `Highest-impact next step: ${result.issues[0].rule.recommendation}`
+      ? `My highest-impact recommendation is to ${result.issues[0].rule.recommendation.charAt(0).toLowerCase()}${result.issues[0].rule.recommendation.slice(1)}`
       : `The architecture satisfies every rule that applies to this context — focus next on cost tuning and operational runbooks.`,
-    `Because the score comes from deterministic rules rather than a model, the same graph always produces the same result; this explanation only interprets it.`,
-  ].join(" ");
+  ].slice(0, 2).join("\n\n");
+}
+
+export function getArchitectureRoadmap(result: AnalysisResult, ctx: ProjectContext): string[] {
+  const steps = result.issues.slice(0, 4).map((issue) => issue.rule.recommendation);
+  const followUps = [
+    `Validate the ${ctx.availability} availability target with failure testing and recovery runbooks.`,
+    `Review ${ctx.cloud.toUpperCase()} costs, quotas, and scaling behavior under ${ctx.traffic} traffic.`,
+    `Re-run the review after each change and confirm the ${ctx.latency} latency target with production-like load tests.`,
+  ];
+  for (const followUp of followUps) {
+    if (steps.length >= 4) break;
+    steps.push(followUp);
+  }
+  return steps;
 }

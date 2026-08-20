@@ -1,12 +1,13 @@
 import { Handle, NodeResizer, Position, type NodeProps, useReactFlow } from "@xyflow/react";
 import { Trash2, GripHorizontal } from "lucide-react";
-import { BOUNDARY_KINDS, findService, type CloudId } from "@/lib/catalog";
+import { BOUNDARY_KINDS, findService, getBoundaryLabel, type CloudId } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 
 export const DELETE_NODE_EVENT = "archguard:delete-node";
 
 /** Small, unobtrusive delete affordance shown on hover or selection. */
-function DeleteControl({ id, selected }: { id: string; selected?: boolean }) {
+function DeleteControl({ id, selected, locked }: { id: string; selected?: boolean; locked: boolean }) {
+  if (locked) return null;
   return (
     <button
       type="button"
@@ -30,6 +31,7 @@ export interface ServiceNodeData extends Record<string, unknown> {
   serviceId: string;
   cloud: CloudId;
   label: string;
+  locked?: boolean;
   status?: "ok" | "warning" | "critical";
 }
 
@@ -50,7 +52,7 @@ export function ServiceNode({ id, data, selected }: NodeProps) {
       )}
       style={{ boxShadow: "0 6px 18px -12px oklch(0 0 0 / 0.9)" }}
     >
-      <DeleteControl id={id} selected={selected} />
+      <DeleteControl id={id} selected={selected} locked={d.locked === true} />
       <Handle
         id="top"
         type="target"
@@ -103,15 +105,18 @@ function cloudColor(cloud: CloudId) {
 export interface BoundaryNodeData extends Record<string, unknown> {
   kind: string;
   label: string;
+  cloud?: CloudId;
+  locked?: boolean;
 }
 
 export function BoundaryNode({ id, data, selected }: NodeProps) {
   const d = data as BoundaryNodeData;
   const def = BOUNDARY_KINDS.find((b) => b.id === d.kind) ?? BOUNDARY_KINDS[0]!;
+  const label = d.label || getBoundaryLabel(d.kind as any, d.cloud);
 
   return (
     <>
-      <NodeResizer minWidth={180} minHeight={120} isVisible={selected} color="var(--primary)" />
+      <NodeResizer minWidth={180} minHeight={120} isVisible={selected && !d.locked} color="var(--primary)" />
       <div
         className="group size-full rounded-xl border-2 border-solid"
         style={{
@@ -119,7 +124,7 @@ export function BoundaryNode({ id, data, selected }: NodeProps) {
           backgroundColor: `color-mix(in oklab, ${def.color} 7%, transparent)`,
         }}
       >
-        <DeleteControl id={id} selected={selected} />
+        <DeleteControl id={id} selected={selected} locked={d.locked === true} />
         <span
           className="absolute -top-2.5 left-3 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
           style={{
@@ -127,7 +132,7 @@ export function BoundaryNode({ id, data, selected }: NodeProps) {
             color: def.color,
           }}
         >
-          {d.label}
+          {label}
         </span>
       </div>
     </>
@@ -136,6 +141,7 @@ export function BoundaryNode({ id, data, selected }: NodeProps) {
 
 export interface TextNodeData extends Record<string, unknown> {
   label: string;
+  locked?: boolean;
 }
 
 export function TextNode({ id, data, selected }: NodeProps) {
@@ -149,7 +155,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         selected ? "ring-1 ring-primary/50 bg-background/50" : "hover:bg-background/30"
       )}
     >
-      <DeleteControl id={id} selected={selected} />
+      <DeleteControl id={id} selected={selected} locked={d.locked === true} />
       
       <div className="absolute -top-5 left-1/2 flex -translate-x-1/2 cursor-grab items-center justify-center rounded border bg-card p-0.5 text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
         <GripHorizontal className="size-3" />
@@ -162,6 +168,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         <input
           value={d.label}
           onChange={(e) => updateNodeData(id, { label: e.target.value })}
+          readOnly={d.locked}
           className="nodrag absolute inset-0 size-full bg-transparent px-1 text-center outline-none"
           placeholder="Type..."
         />

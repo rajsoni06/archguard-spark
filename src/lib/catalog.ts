@@ -41,6 +41,7 @@ export type Capability =
   | "cdn"
   | "waf"
   | "load-balancer"
+  | "reverse-proxy"
   | "api-gateway"
   | "compute"
   | "container"
@@ -49,20 +50,34 @@ export type Capability =
   | "cache"
   | "database"
   | "managed-database"
+  | "sql"
   | "nosql"
+  | "warehouse"
+  | "search"
   | "object-storage"
+  | "storage"
   | "block-storage"
   | "archive"
   | "queue"
   | "pubsub"
   | "streaming"
+  | "event-bus"
+  | "etl"
+  | "data-lake"
+  | "data-catalog"
+  | "bi"
+  | "ml"
   | "auth"
   | "secrets"
   | "encryption"
   | "network"
   | "private-network"
   | "monitoring"
-  | "tracing";
+  | "tracing"
+  | "replication"
+  | "read-replica"
+  | "health-check"
+  | "failover";
 
 export interface ServiceDef {
   id: string;
@@ -72,6 +87,9 @@ export interface ServiceDef {
   iconUrl?: string;
   caps: Capability[];
   note?: string;
+  /** Optional hints used by architecture review and boundary-aware layout. */
+  recommendedBoundaries?: string[];
+  relationships?: { to: Capability[]; mode: "sync" | "async" | "data" }[];
 }
 
 export interface CloudDef {
@@ -82,13 +100,24 @@ export interface CloudDef {
   categories: { name: string; services: ServiceDef[] }[];
 }
 
+export function getBoundaryLabel(kind: BoundaryKind, cloud?: CloudId): string {
+  if (kind === "vpc") {
+    if (cloud === "azure") return "Virtual Network (VNet)";
+    if (cloud === "aws") return "VPC";
+    return "Virtual Network";
+  }
+
+  return BOUNDARY_KINDS.find((b) => b.id === kind)?.label ?? kind;
+}
+
 const s = (
   id: string,
   name: string,
   category: string,
   icon: LucideIcon,
   caps: Capability[],
-): ServiceDef => ({ id, name, category, icon, caps });
+  metadata?: Pick<ServiceDef, "note" | "recommendedBoundaries" | "relationships">,
+): ServiceDef => ({ id, name, category, icon, caps, ...metadata });
 
 export const CLOUDS: Record<CloudId, CloudDef> = {
   aws: {
@@ -117,6 +146,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("nat", "NAT Gateway", "Networking", Network, ["network"]),
           s("alb", "ALB", "Networking", Scale, ["load-balancer"]),
           s("nlb", "NLB", "Networking", Scale, ["load-balancer"]),
+          s("elb", "Elastic Load Balancing", "Networking", Scale, ["load-balancer", "health-check", "failover"]),
+          s("reverse-proxy", "Reverse Proxy", "Networking", Route, ["reverse-proxy", "load-balancer"]),
           s("route53", "Route 53", "Networking", Route, ["dns"]),
           s("transit-gateway", "Transit Gateway", "Networking", Network, ["network"]),
         ],
@@ -133,12 +164,12 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Database",
         services: [
-          s("rds", "RDS", "Database", Database, ["database", "managed-database"]),
-          s("aurora", "Aurora", "Database", Database, ["database", "managed-database"]),
+          s("rds", "RDS (SQL)", "Database", Database, ["database", "managed-database", "sql", "read-replica", "replication"]),
+          s("aurora", "Aurora (SQL)", "Database", Database, ["database", "managed-database", "sql", "read-replica", "replication"]),
           s("dynamodb", "DynamoDB", "Database", Layers, ["database", "nosql"]),
           s("elasticache", "ElastiCache", "Database", Gauge, ["cache"]),
-          s("opensearch", "OpenSearch", "Database", Database, ["database"]),
-          s("redshift", "Redshift", "Database", Database, ["database"]),
+          s("opensearch", "OpenSearch", "Database", Database, ["database", "search"]),
+          s("redshift", "Redshift", "Database", Database, ["database", "warehouse"]),
         ],
       },
       {
@@ -148,6 +179,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("sqs", "SQS", "Integration", MessageSquare, ["queue"]),
           s("sns", "SNS", "Integration", Radio, ["pubsub"]),
           s("eventbridge", "EventBridge", "Integration", Workflow, ["pubsub"]),
+          s("event-bus", "Event Bus", "Integration", Workflow, ["event-bus", "pubsub"]),
           s("stepfunctions", "Step Functions", "Integration", Workflow, ["serverless"]),
           s("msk", "MSK", "Integration", Waves, ["streaming"]),
         ],
@@ -193,11 +225,14 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Analytics",
         services: [
-          s("athena", "Athena", "Analytics", Database, ["database"]),
-          s("glue", "Glue", "Analytics", Layers, ["compute"]),
+          s("athena", "Athena", "Analytics", Database, ["database", "warehouse"]),
+          s("glue", "Glue ETL", "Analytics", Layers, ["compute", "etl", "data-catalog"]),
+          s("datalake", "S3 Data Lake", "Analytics", Archive, ["object-storage", "data-lake"]),
+          s("datacatalog", "Glue Data Catalog", "Analytics", Layers, ["data-catalog"]),
           s("kinesis", "Kinesis", "Analytics", Waves, ["streaming"]),
           s("emr", "EMR", "Analytics", Server, ["compute"]),
           s("redshift-analytics", "Redshift", "Analytics", Database, ["database"]),
+          s("quicksight", "QuickSight", "Analytics", BarChart3, ["bi"]),
         ],
       },
       {
@@ -254,6 +289,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("cdn", "Azure CDN", "Networking", Globe, ["cdn"]),
           s("apim", "API Management", "Networking", Workflow, ["api-gateway"]),
           s("appgw", "Application Gateway", "Networking", Scale, ["load-balancer", "waf"]),
+          s("reverse-proxy", "Reverse Proxy", "Networking", Route, ["reverse-proxy", "load-balancer"]),
           s("frontdoor", "Front Door", "Networking", Globe, ["cdn", "load-balancer"]),
           s("vpngw", "VPN Gateway", "Networking", Network, ["network"]),
           s("expressroute", "ExpressRoute", "Networking", Network, ["network"]),
@@ -274,10 +310,10 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Database",
         services: [
-          s("sqldb", "Azure SQL", "Database", Database, ["database", "managed-database"]),
+          s("sqldb", "Azure SQL", "Database", Database, ["database", "managed-database", "sql", "read-replica", "replication"]),
           s("pgflex", "PostgreSQL Flexible", "Database", Database, ["database", "managed-database"]),
           s("mysql", "MySQL Flexible", "Database", Database, ["database", "managed-database"]),
-          s("cosmos", "Cosmos DB", "Database", Layers, ["database", "nosql"]),
+          s("cosmos", "Cosmos DB", "Database", Layers, ["database", "nosql", "replication"]),
           s("rediscache", "Azure Cache for Redis", "Database", Gauge, ["cache"]),
         ],
       },
@@ -287,6 +323,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("servicebus", "Service Bus", "Integration", MessageSquare, ["queue"]),
           s("eventgrid", "Event Grid", "Integration", Radio, ["pubsub"]),
           s("eventhubs", "Event Hubs", "Integration", Waves, ["streaming"]),
+          s("eventbus", "Event Bus", "Integration", Workflow, ["event-bus", "pubsub"]),
           s("logicapps", "Logic Apps", "Integration", Workflow, ["serverless"]),
           s("queuestorage", "Queue Storage", "Integration", MessageSquare, ["queue"]),
         ],
@@ -329,9 +366,12 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Analytics",
         services: [
-          s("synapse", "Synapse Analytics", "Analytics", Database, ["database"]),
+          s("synapse", "Synapse Analytics", "Analytics", Database, ["database", "warehouse"]),
           s("databricks", "Databricks", "Analytics", Layers, ["compute"]),
-          s("datafactory", "Data Factory", "Analytics", Workflow, ["compute"]),
+          s("datafactory", "Data Factory ETL", "Analytics", Workflow, ["compute", "etl"]),
+          s("datalakegen2", "Data Lake Storage Gen2", "Analytics", Archive, ["object-storage", "data-lake"]),
+          s("datacatalog", "Microsoft Purview", "Analytics", Layers, ["data-catalog"]),
+          s("powerbi", "Power BI", "Analytics", BarChart3, ["bi"]),
           s("hdinsight", "HDInsight", "Analytics", Server, ["compute"]),
           s("streamanalytics", "Stream Analytics", "Analytics", Waves, ["streaming"]),
         ],
@@ -388,6 +428,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("cdn", "Cloud CDN", "Networking", Globe, ["cdn"]),
           s("apigee", "Apigee API Gateway", "Networking", Workflow, ["api-gateway"]),
           s("clb", "Cloud Load Balancing", "Networking", Scale, ["load-balancer"]),
+          s("reverse-proxy", "Reverse Proxy", "Networking", Route, ["reverse-proxy", "load-balancer"]),
           s("natgw", "Cloud NAT", "Networking", Network, ["network"]),
           s("cloudrouter", "Cloud Router", "Networking", Route, ["network"]),
           s("cloudinterconnect", "Cloud Interconnect", "Networking", Network, ["network"]),
@@ -405,10 +446,10 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Database",
         services: [
-          s("cloudsql", "Cloud SQL", "Database", Database, ["database", "managed-database"]),
-          s("spanner", "Spanner", "Database", Database, ["database", "managed-database"]),
+          s("cloudsql", "Cloud SQL", "Database", Database, ["database", "managed-database", "sql", "read-replica", "replication"]),
+          s("spanner", "Spanner", "Database", Database, ["database", "managed-database", "sql", "replication"]),
           s("firestore", "Firestore", "Database", Layers, ["database", "nosql"]),
-          s("bigtable", "Bigtable", "Database", Layers, ["database", "nosql"]),
+          s("bigtable", "Bigtable", "Database", Layers, ["database", "nosql", "replication"]),
           s("memorystore", "Memorystore", "Database", Gauge, ["cache"]),
           s("alloydb", "AlloyDB", "Database", Database, ["database", "managed-database"]),
         ],
@@ -419,6 +460,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("pubsub", "Pub/Sub", "Integration", Radio, ["pubsub", "queue"]),
           s("tasks", "Cloud Tasks", "Integration", Timer, ["queue"]),
           s("eventarc", "Eventarc", "Integration", Workflow, ["pubsub"]),
+          s("eventbus", "Event Bus", "Integration", Workflow, ["event-bus", "pubsub"]),
           s("cloudendpoints", "Cloud Endpoints", "Integration", Workflow, ["api-gateway"]),
           s("workflows", "Workflows", "Integration", Workflow, ["serverless"]),
         ],
@@ -465,8 +507,12 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "Analytics",
         services: [
-          s("bigquery", "BigQuery", "Analytics", Database, ["database"]),
+          s("bigquery", "BigQuery", "Analytics", Database, ["database", "warehouse"]),
           s("dataflow", "Dataflow", "Analytics", Waves, ["streaming"]),
+          s("datalake", "Cloud Storage Data Lake", "Analytics", Archive, ["object-storage", "data-lake"]),
+          s("datacatalog", "Dataplex Data Catalog", "Analytics", Layers, ["data-catalog"]),
+          s("datafusion", "Cloud Data Fusion ETL", "Analytics", Workflow, ["etl"]),
+          s("lookerstudio", "Looker Studio", "Analytics", BarChart3, ["bi"]),
           s("dataproc", "Dataproc", "Analytics", Server, ["compute"]),
           s("looker", "Looker", "Analytics", BarChart3, ["compute"]),
         ],
@@ -510,7 +556,7 @@ export function findService(cloud: CloudId, serviceId: string): ServiceDef | und
 
 export const BOUNDARY_KINDS = [
   { id: "region", label: "Region", color: "var(--info)", icon: Globe },
-  { id: "vpc", label: "VPC", color: "var(--primary)", icon: Network },
+  { id: "vpc", label: "Virtual Network", color: "var(--primary)", icon: Network },
   { id: "az", label: "Availability Zone", color: "var(--muted-foreground)", icon: Cloud },
   { id: "public-subnet", label: "Public Subnet", color: "var(--warning)", icon: Split },
   { id: "private-subnet", label: "Private Subnet", color: "var(--success)", icon: Split },

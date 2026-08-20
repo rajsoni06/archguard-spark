@@ -4,6 +4,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  applyNodeChanges,
   MarkerType,
   ReactFlow,
   ReactFlowProvider,
@@ -39,12 +40,17 @@ import {
   Unlock,
   BoxSelect,
   ZapOff,
+  Moon,
+  Sun,
+  ArrowDown,
+  ArrowRight,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { BOUNDARY_KINDS, findService, type CloudId } from "@/lib/catalog";
+import { BOUNDARY_KINDS, findService, getBoundaryLabel, type CloudId } from "@/lib/catalog";
 import { analyzeArchitecture, type AnalysisResult, type ProjectContext, type ArchGraph } from "@/lib/ruleEngine";
 import { computeAutoLayout } from "@/lib/autoLayout";
+import { normalizeBoundaryLayout, rectForNode, inflateRect, rectContainsRect, type DiagramNodeLike } from "@/lib/boundaryGeometry";
 import { estimateCost } from "@/lib/costEngine";
 import { loadGraph, saveGraph } from "@/lib/session";
 import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode } from "./nodes";
@@ -54,14 +60,6 @@ import { FailureSimulator } from "./FailureSimulator";
 import { TradeoffCard } from "./TradeoffCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 const nodeTypes = { service: ServiceNode, boundary: BoundaryNode, text: TextNode };
@@ -74,6 +72,39 @@ const NODE_H = 66;
 const GAP = 42;
 const MIN_REVIEW_W = 300;
 const MAX_REVIEW_W = 620;
+const CANVAS_THEME_STORAGE_KEY = "archguard-canvas-theme";
+const CANVAS_LOCK_STORAGE_KEY = "archguard-canvas-locked";
+type CanvasTheme = "light" | "dark";
+
+const CANVAS_THEMES: Record<CanvasTheme, { canvas: string; grid: string; overlay: string }> = {
+  light: {
+    canvas: "oklch(0.985 0.003 250)",
+    grid: "oklch(0.9 0.006 250)",
+    overlay: "linear-gradient(180deg, color-mix(in oklab, white 78%, transparent), transparent)",
+  },
+  dark: {
+    canvas: "oklch(0.165 0.014 258)",
+    grid: "oklch(0.38 0.015 258)",
+    overlay: "linear-gradient(180deg, color-mix(in oklab, black 22%, transparent), transparent)",
+  },
+};
+
+// A compact, theme-safe palette makes nearby relationships distinguishable
+// without changing the established service/node colors.
+const CONNECTION_COLORS = [
+  "#2563eb",
+  "#0891b2",
+  "#059669",
+  "#d97706",
+  "#db2777",
+  "#7c3aed",
+  "#dc2626",
+  "#0f766e",
+  "#4f46e5",
+  "#c2410c",
+];
+
+const connectionColor = (index: number) => CONNECTION_COLORS[index % CONNECTION_COLORS.length]!;
 
 /** Finds the first free slot on a grid so click-added nodes never overlap. */
 function findFreeSlot(existing: Node[], origin: { x: number; y: number }) {
@@ -114,9 +145,15 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [libCollapsed, setLibCollapsed] = useState(false);
-  const [reviewCollapsed, setReviewCollapsed] = useState(false);
+  // Review is an explicit user-invoked workspace panel. New/empty canvases
+  // should keep the full canvas width until the user asks for a review.
+  const [isReviewPanelOpen, setIsReviewPanelOpen] = useState(false);
   const [reviewWidth, setReviewWidth] = useState(340);
   const [tool, setTool] = useState<"select" | "pan">("select");
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CANVAS_LOCK_STORAGE_KEY) === "true";
+  });
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -130,6 +167,80 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     useReactFlow();
 
   const [zoomPct, setZoomPct] = useState(100);
+  const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = window.localStorage.getItem(CANVAS_THEME_STORAGE_KEY);
+    return stored === "dark" ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CANVAS_THEME_STORAGE_KEY, canvasTheme);
+    } catch {
+      // ignore storage failures
+    }
+  }, [canvasTheme]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CANVAS_LOCK_STORAGE_KEY, String(isLocked));
+    } catch {
+      // ignore storage failures
+    }
+  }, [isLocked]);
+
+  const canvasPalette = CANVAS_THEMES[canvasTheme];
+  const renderedNodes = useMemo(
+    () =>
+      isLocked
+        ? nodes.map((node) => ({
+            ...node,
+            data: { ...node.data, locked: true },
+          }))
+        : nodes,
+    [isLocked, nodes],
+  );
+
+  const normalizeNodes = useCallback(
+    (list: Node[]) =>
+      normalizeBoundaryLayout(list as DiagramNodeLike[], {
+        cloud: ctx.cloud,
+        resolveService: (node) => {
+          if (node.type !== "service") return undefined;
+          const data = node.data as { serviceId?: string; cloud?: CloudId };
+          if (!data.serviceId) return undefined;
+          const svc = findService(data.cloud || ctx.cloud, data.serviceId);
+          return svc ? { id: svc.id, category: svc.category, caps: svc.caps } : undefined;
+        },
+      }) as Node[],
+    [ctx.cloud],
+  );
+
+  const commitNodes = useCallback(
+    (updater: Node[] | ((curr: Node[]) => Node[])) => {
+      setNodes((current) => {
+        const next = typeof updater === "function" ? updater(current) : updater;
+        return normalizeNodes(next);
+      });
+    },
+    [normalizeNodes, setNodes],
+  );
+
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof applyNodeChanges>[0]) => {
+      if (isLocked) return;
+      setNodes((current) => normalizeNodes(applyNodeChanges(changes, current)));
+    },
+    [isLocked, normalizeNodes, setNodes],
+  );
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      if (isLocked) return;
+      onEdgesChange(changes);
+    },
+    [isLocked, onEdgesChange],
+  );
 
   // Keep the visible zoom percentage in sync with the viewport. Polling is
   // used because React Flow does not expose a lightweight viewport-change
@@ -158,12 +269,31 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   useEffect(() => {
     const stored = loadGraph();
     if (stored?.nodes?.length || stored?.edges?.length) {
-      setNodes(stored.nodes as Node[]);
+      commitNodes(stored.nodes as Node[]);
       setEdges(stored.edges as Edge[]);
       setTimeout(() => fitView({ padding: 0.2 }), 80);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [commitNodes]);
+
+  useEffect(() => {
+    commitNodes((nds) => {
+      let changed = false;
+      const next = nds.map((n) => {
+        if (n.type !== "boundary") return n;
+        const d = n.data as { kind?: string; label?: string; cloud?: CloudId };
+        if (!d.kind) return n;
+        const label = getBoundaryLabel(d.kind as any, ctx.cloud);
+        if (d.cloud === ctx.cloud && d.label === label) return n;
+        changed = true;
+        return {
+          ...n,
+          data: { ...d, cloud: ctx.cloud, label },
+        };
+      });
+      return changed ? next : nds;
+    });
+  }, [commitNodes, ctx.cloud]);
 
   useEffect(() => {
     saveGraph({ nodes, edges });
@@ -178,7 +308,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     }, 320); // wait slightly longer than CSS transition (300ms)
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewCollapsed, libCollapsed, fitView]);
+  }, [isReviewPanelOpen, libCollapsed, fitView]);
 
   const cost = useMemo(
     () =>
@@ -201,41 +331,45 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   }, [nodes, edges]);
 
   const undo = () => {
+    if (isLocked) return;
     const prev = past.current.pop();
     if (!prev) return;
     future.current.push({ nodes, edges });
-    setNodes(prev.nodes);
+    commitNodes(prev.nodes);
     setEdges(prev.edges);
   };
 
   const redo = () => {
+    if (isLocked) return;
     const next = future.current.pop();
     if (!next) return;
     past.current.push({ nodes, edges });
-    setNodes(next.nodes);
+    commitNodes(next.nodes);
     setEdges(next.edges);
   };
 
   const restore = useCallback(
     (state: { nodes: Node[]; edges: Edge[] }) => {
-      setNodes(state.nodes);
+      commitNodes(state.nodes);
       setEdges(state.edges);
     },
-    [setNodes, setEdges],
+    [commitNodes, setEdges],
   );
 
   // React Flow already strips edges attached to a removed node; we only add the
   // snapshot + undo affordance around it so deletion is safe.
   const onBeforeDelete = useCallback(async () => {
+    if (isLocked) return false;
     pendingDelete.current = {
       nodes: [...graphRef.current.nodes],
       edges: [...graphRef.current.edges],
     };
     return true;
-  }, []);
+  }, [isLocked]);
 
   const onDelete = useCallback(
     ({ nodes: removed }: { nodes: Node[]; edges: Edge[] }) => {
+      if (isLocked) return;
       const before = pendingDelete.current;
       pendingDelete.current = null;
       if (!before || removed.length === 0) return;
@@ -251,23 +385,25 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         duration: 7000,
       });
     },
-    [restore],
+    [isLocked, restore],
   );
 
   // Delete affordance rendered on each node dispatches through React Flow so
   // edges, selection and history all stay consistent.
   useEffect(() => {
     const handler = (event: Event) => {
+      if (isLocked) return;
       const id = (event as CustomEvent<{ id: string }>).detail?.id;
       if (!id) return;
       void deleteElements({ nodes: [{ id }] });
     };
     window.addEventListener(DELETE_NODE_EVENT, handler);
     return () => window.removeEventListener(DELETE_NODE_EVENT, handler);
-  }, [deleteElements]);
+  }, [deleteElements, isLocked]);
 
   const addFromLibrary = useCallback(
     (payload: LibraryPayload) => {
+      if (isLocked) return;
       snapshot();
       const vp = getViewport();
       const box = wrapper.current?.getBoundingClientRect();
@@ -275,15 +411,13 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       const originY = (-vp.y + (box ? box.height * 0.18 : 120)) / vp.zoom;
 
       if (payload.kind === "boundary") {
-        const kindIndex = BOUNDARY_KINDS.findIndex((b) => b.id === payload.id);
-        const z = 100 + Math.max(0, kindIndex) * 10;
-        setNodes((nds) =>
+        commitNodes((nds) =>
           adjustBoundaryZIndices([
             {
               id: nextId(),
               type: "boundary",
               position: { x: Math.round(originX), y: Math.round(originY) },
-              data: { kind: payload.id, label: payload.label },
+              data: { kind: payload.id, label: getBoundaryLabel(payload.id as any, ctx.cloud), cloud: ctx.cloud },
               style: { width: 380, height: 240 },
               selectable: true,
             } as Node,
@@ -299,7 +433,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         return;
       }
 
-      setNodes((nds) => {
+      commitNodes((nds) => {
         const position = findFreeSlot(nds, {
           x: Math.round(originX),
           y: Math.round(originY),
@@ -318,11 +452,12 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       const vp2 = getViewport();
       if ((vp2.zoom ?? 1) > 1.25) void zoomOut();
     },
-    [ctx.cloud, getViewport, setNodes, snapshot],
+    [commitNodes, ctx.cloud, getViewport, isLocked, snapshot, zoomOut],
   );
 
   const onConnect = useCallback(
     (params: Connection) => {
+      if (isLocked) return;
       snapshot();
       // pick best handles based on current node positions
       const pickHandles = (srcId?: string, tgtId?: string) => {
@@ -390,20 +525,20 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             ...handles,
             type: "smoothstep",
             animated: true,
-            style: { stroke: "var(--primary)" },
-            markerEnd: { type: MarkerType.ArrowClosed, color: "var(--primary)" },
+            style: { stroke: connectionColor(eds.length) },
+            markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(eds.length) },
           },
           eds,
         ),
       );
     },
-    [setEdges, snapshot, nodes],
+    [isLocked, setEdges, snapshot, nodes],
   );
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      if (tool === "pan") return;
+      if (isLocked || tool === "pan") return;
 
       const raw = event.dataTransfer.getData("application/archguard");
       if (!raw) return;
@@ -412,15 +547,13 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       snapshot();
 
       if (payload.kind === "boundary") {
-        const kindIndex = BOUNDARY_KINDS.findIndex((b) => b.id === payload.id);
-        const z = 100 + Math.max(0, kindIndex) * 10;
-        setNodes((nds) =>
+        commitNodes((nds) =>
           adjustBoundaryZIndices([
             {
               id: nextId(),
               type: "boundary",
               position,
-              data: { kind: payload.id, label: payload.label },
+              data: { kind: payload.id, label: getBoundaryLabel(payload.id as any, ctx.cloud), cloud: ctx.cloud },
               style: { width: 380, height: 240 },
               selectable: true,
             } as Node,
@@ -432,7 +565,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         return;
       }
 
-      setNodes((nds) => [
+      commitNodes((nds) => [
         ...nds,
         {
           id: nextId(),
@@ -444,21 +577,22 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       const vp2 = getViewport();
       if ((vp2.zoom ?? 1) > 1.25) void zoomOut();
     },
-    [ctx.cloud, screenToFlowPosition, setNodes, snapshot, tool],
+    [commitNodes, ctx.cloud, isLocked, screenToFlowPosition, snapshot, tool],
   );
 
   const boundaryOf = useCallback(
     (node: Node) => {
       const boundaries = nodes.filter((n) => n.type === "boundary");
+      const nodeRect = rectForNode(node as DiagramNodeLike);
       const inside = boundaries.filter((b) => {
-        const w = Number(b.style?.width ?? 380);
-        const h = Number(b.style?.height ?? 240);
-        return (
-          node.position.x >= b.position.x &&
-          node.position.x <= b.position.x + w &&
-          node.position.y >= b.position.y &&
-          node.position.y <= b.position.y + h
-        );
+        const bRect = rectForNode(b as DiagramNodeLike);
+        const inner = {
+          x: bRect.x + 18,
+          y: bRect.y + 18,
+          width: Math.max(0, bRect.width - 36),
+          height: Math.max(0, bRect.height - 36),
+        };
+        return rectContainsRect(inner, nodeRect);
       });
       const priority = [
         "database-layer",
@@ -553,11 +687,12 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     };
     const analysis = analyzeArchitecture(graph, ctx);
     setResult(analysis);
-    setReviewCollapsed(false);
+    setIsReviewPanelOpen(true);
     toast.success(`Review complete — ${analysis.overall}/100 · ${analysis.maturity}`);
   };
 
   const autoLayout = (dirOverride?: "LR" | "TB") => {
+    if (isLocked) return;
     const activeDirection = dirOverride || layoutDirection;
     if (dirOverride) setLayoutDirection(dirOverride);
 
@@ -571,7 +706,14 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     const layoutNodes = services.map((n) => {
       const d = n.data as { serviceId: string; label: string; cloud?: CloudId };
       const svc = findService(d.cloud || ctx.cloud, d.serviceId);
-      return { id: n.id, label: d.label, caps: svc?.caps ?? [] };
+      return {
+        id: n.id,
+        serviceId: d.serviceId,
+        label: d.label,
+        category: svc?.category ?? "",
+        cloud: d.cloud || ctx.cloud,
+        caps: svc?.caps ?? [],
+      };
     });
 
     // If the user has explicitly selected boundaries, only consider those.
@@ -584,18 +726,9 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       ? selectedBoundaries
       : nodes.filter((n) => n.type === "boundary");
 
-    const servicePositions = services.map((s) => ({ x: s.position.x, y: s.position.y }));
-    boundaryCandidates = boundaryCandidates.filter((b) => {
-      const w = Number(b.style?.width ?? 380);
-      const h = Number(b.style?.height ?? 240);
-      const bx = b.position.x;
-      const by = b.position.y;
-      return servicePositions.some((p) => p.x >= bx && p.x <= bx + w && p.y >= by && p.y <= by + h);
-    });
-
     const boundaryNodes = boundaryCandidates.map((n) => ({
       id: n.id,
-      kind: (n.data as { kind: string }).kind,
+      kind: (n.data as { kind: string }).kind as (typeof BOUNDARY_KINDS)[number]["id"],
     }));
 
     const {
@@ -628,7 +761,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
 
     // Adjust z-indexes for nested boundaries so interaction targets the
     // innermost/topmost boundary first.
-    setNodes(() => adjustBoundaryZIndices(newNodes));
+    commitNodes(() => adjustBoundaryZIndices(normalizeNodes(newNodes)));
 
     const handleUsage = new Map<string, number>();
 
@@ -671,21 +804,21 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         // Primary: Right → Left (horizontal flow)
         // Only fall back to vertical handles if nodes are nearly on the same X
         if (absDx >= absDy * 0.5) {
-          preferredSrc = dx >= 0 ? "right" : "left";
-          preferredTgt = dx >= 0 ? "left" : "right";
+          preferredSrc = "right";
+          preferredTgt = "left";
         } else {
-          preferredSrc = dy >= 0 ? "bottom" : "top";
-          preferredTgt = dy >= 0 ? "top" : "bottom";
+          preferredSrc = "bottom";
+          preferredTgt = "top";
         }
       } else {
         // TB: Primary: Bottom → Top (vertical flow)
         // Only fall back to horizontal handles if nodes are nearly on the same Y
         if (absDy >= absDx * 0.5) {
-          preferredSrc = dy >= 0 ? "bottom" : "top";
-          preferredTgt = dy >= 0 ? "top" : "bottom";
+          preferredSrc = "bottom";
+          preferredTgt = "top";
         } else {
-          preferredSrc = dx >= 0 ? "right" : "left";
-          preferredTgt = dx >= 0 ? "left" : "right";
+          preferredSrc = "right";
+          preferredTgt = "left";
         }
       }
 
@@ -699,12 +832,12 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
 
       // When a handle is overloaded (≥2 edges), pick the best available alternative
       if (srcUsage >= 2 || tgtUsage >= 2) {
-        const allHandles = ["top", "right", "bottom", "left"];
+        const sourceHandles = ["right", "bottom"];
+        const targetHandles = ["left", "top"];
         let bestScore = Infinity;
 
-        for (const sHc of allHandles) {
-          for (const tHc of allHandles) {
-            if (sHc === tHc) continue; // avoid same-face loops
+        for (const sHc of sourceHandles) {
+          for (const tHc of targetHandles) {
             const p1 = handlePoint(srcPos, sHc);
             const p2 = handlePoint(tgtPos, tHc);
             const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -739,9 +872,10 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         target: e.target,
         ...pickHandlesForIds(e.source, e.target),
         type: "smoothstep",
+        pathOptions: { offset: 18, borderRadius: 10 },
         animated: true,
-        style: { stroke: "var(--primary)" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--primary)" },
+        style: { stroke: connectionColor(i) },
+        markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(i) },
       })),
     );
 
@@ -760,23 +894,35 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     );
   };
 
+  const applyLayoutDirection = (direction: "LR" | "TB") => {
+    if (isLocked) return;
+    setLayoutDirection(direction);
+    if (nodes.filter((n) => n.type === "service").length >= 2) {
+      autoLayout(direction);
+    }
+  };
+
+  const layoutDirectionLabel = layoutDirection === "TB" ? "Top -> Down" : "Left -> Right";
+
   const addText = () => {
+    if (isLocked) return;
     snapshot();
-    setNodes((nds) => [
+    commitNodes((nds) => [
       ...nds,
       { id: nextId(), type: "text", position: { x: 60, y: 40 }, data: { label: "Label" } } as Node,
     ]);
   };
 
   const addGroup = () => {
+    if (isLocked) return;
     snapshot();
-    setNodes((nds) =>
+    commitNodes((nds) =>
       adjustBoundaryZIndices([
         {
           id: nextId(),
           type: "boundary",
           position: { x: 40, y: 40 },
-          data: { kind: "service-group", label: BOUNDARY_KINDS[6]!.label },
+          data: { kind: "service-group", label: getBoundaryLabel("service-group", ctx.cloud), cloud: ctx.cloud },
           style: { width: 400, height: 260 },
         } as Node,
         ...nds,
@@ -978,12 +1124,25 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => setTool((t) => (t === "pan" ? "select" : "pan"))}
-            title="Toggle interactivity"
+            size="sm"
+            className="h-8 gap-2 px-2.5 text-[11px] font-medium"
+            onClick={() => setCanvasTheme((t) => (t === "dark" ? "light" : "dark"))}
+            title={`Switch canvas to ${canvasTheme === "dark" ? "Light" : "Dark"} Mode`}
+            aria-pressed={canvasTheme === "dark"}
           >
-            {tool === "pan" ? <Lock className="size-4" /> : <Unlock className="size-4" />}
+            {canvasTheme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+            <span className="hidden sm:inline">{canvasTheme === "dark" ? "Light" : "Dark"} Mode</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("size-8", isLocked && "bg-primary/15 text-primary")}
+            onClick={() => setIsLocked((locked) => !locked)}
+            title={isLocked ? "Unlock canvas" : "Lock canvas"}
+            aria-label={isLocked ? "Unlock canvas" : "Lock canvas"}
+            aria-pressed={isLocked}
+          >
+            {isLocked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
           </Button>
         </div>
         <div className="flex items-center gap-1.5">
@@ -996,7 +1155,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           <Button variant="ghost" size="sm" onClick={handleExport} title="Export image (PNG/JPG)">
             <Download className="size-4" /> Export
           </Button>
-          <Button variant="ghost" size="sm" onClick={onNewProject}>
+          <Button variant="ghost" size="sm" onClick={onNewProject} disabled={isLocked}>
             <FilePlus2 className="size-4" /> New
           </Button>
           <Button
@@ -1008,22 +1167,29 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           >
             <ZapOff className="size-4" /> Simulate Failure
           </Button>
-          <Button size="sm" onClick={runReview}>
+          <Button size="sm" onClick={() => (isReviewPanelOpen ? setIsReviewPanelOpen(false) : runReview())}>
             <Sparkles className="size-4" /> Review Architecture
           </Button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <ComponentLibrary
-          cloud={ctx.cloud}
+          <ComponentLibrary
+            cloud={ctx.cloud}
           collapsed={libCollapsed}
           onToggle={() => setLibCollapsed((c) => !c)}
           onAdd={addFromLibrary}
         />
 
-        <div ref={wrapper} className="relative min-w-0 flex-1 bg-background">
-          <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur">
+        <div
+          ref={wrapper}
+          className="relative min-w-0 flex-1 overflow-hidden transition-[background-color,background-image] duration-300"
+          style={{
+            backgroundColor: canvasPalette.canvas,
+            backgroundImage: canvasPalette.overlay,
+          }}
+        >
+          <div className="absolute left-1/2 top-3 z-10 flex w-max max-w-[calc(100%-1rem)] -translate-x-1/2 flex-nowrap items-center justify-start gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur sm:gap-1 sm:p-1.5">
             <ToolButton active={tool === "select"} onClick={() => setTool("select")} label="Select">
               <MousePointer2 className="size-4" />
             </ToolButton>
@@ -1031,48 +1197,75 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
               <Move className="size-4" />
             </ToolButton>
             <Divider />
-            <ToolButton onClick={addText} label="Text">
+            <ToolButton onClick={addText} label="Text" disabled={isLocked}>
               <TypeIcon className="size-4" />
             </ToolButton>
-            <ToolButton onClick={addGroup} label="Group">
+            <ToolButton onClick={addGroup} label="Group" disabled={isLocked}>
               <BoxSelect className="size-4" />
             </ToolButton>
             <Divider />
-            <ToolButton onClick={undo} label="Undo">
+            <ToolButton onClick={undo} label="Undo" disabled={isLocked}>
               <Undo2 className="size-4" />
             </ToolButton>
-            <ToolButton onClick={redo} label="Redo">
+            <ToolButton onClick={redo} label="Redo" disabled={isLocked}>
               <Redo2 className="size-4" />
             </ToolButton>
             <Divider />
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <ToolButton id="auto-layout-trigger" onClick={() => {}} label="Auto layout">
-                  <Wand2 className="size-4" />
-                </ToolButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={10}>
-                <DropdownMenuLabel>Choose Layout Direction</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => autoLayout("TB")}>
-                  ↓ Top → Down
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => autoLayout("LR")}>
-                  → Left → Right
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ToolButton
+              id="auto-layout-trigger"
+              label={`Auto layout ${layoutDirectionLabel}`}
+              type="button"
+              onClick={() => autoLayout()}
+              disabled={isLocked}
+            >
+              <Wand2 className="size-4" />
+            </ToolButton>
+            <div className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface/95 p-0.5 sm:gap-1 sm:p-1">
+              <button
+                type="button"
+                onClick={() => applyLayoutDirection("TB")}
+                aria-pressed={layoutDirection === "TB"}
+                disabled={isLocked}
+                aria-label="Layout direction: Top to Down"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-colors sm:px-2.5 sm:text-[11px]",
+                  layoutDirection === "TB"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <ArrowDown aria-hidden="true" className="size-3 shrink-0 sm:size-3.5" />
+                <span className="whitespace-nowrap">Top - Down</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applyLayoutDirection("LR")}
+                aria-pressed={layoutDirection === "LR"}
+                disabled={isLocked}
+                aria-label="Layout direction: Left to Right"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-colors sm:px-2.5 sm:text-[11px]",
+                  layoutDirection === "LR"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <ArrowRight aria-hidden="true" className="size-3 shrink-0 sm:size-3.5" />
+                <span className="whitespace-nowrap">Left - Right</span>
+              </button>
+            </div>
             <ToolButton onClick={fullscreen} label="Fullscreen">
               <Maximize2 className="size-4" />
             </ToolButton>
           </div>
 
           <ReactFlow
-            nodes={nodes}
+            style={{ background: "transparent" }}
+            nodes={renderedNodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onDrop={onDrop}
             onBeforeDelete={onBeforeDelete}
@@ -1087,19 +1280,24 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             onPaneClick={() => setSelectedNodeId(null)}
             onDragOver={(e) => {
               e.preventDefault();
-              e.dataTransfer.dropEffect = tool === "pan" ? "none" : "move";
+              e.dataTransfer.dropEffect = isLocked || tool === "pan" ? "none" : "move";
             }}
             nodeTypes={nodeTypes}
-            panOnDrag={tool === "pan" ? true : [1, 2]}
-            selectionOnDrag={tool === "select"}
-            nodesDraggable={tool === "select"}
-            nodesConnectable={tool === "select"}
-            elementsSelectable={tool === "select"}
+            panOnDrag={isLocked || tool === "pan" ? true : [1, 2]}
+            selectionOnDrag={!isLocked && tool === "select"}
+            nodesDraggable={!isLocked && tool === "select"}
+            nodesConnectable={!isLocked && tool === "select"}
+            elementsSelectable={!isLocked && tool === "select"}
             deleteKeyCode={["Backspace", "Delete"]}
             fitView
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--grid)" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={20}
+              size={1}
+              color={canvasPalette.grid}
+            />
           </ReactFlow>
 
           {nodes.length === 0 ? (
@@ -1117,7 +1315,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
               const d = selectedNode.data as { serviceId: string; label: string; cloud?: CloudId };
               const svc = findService(d.cloud || ctx.cloud, d.serviceId);
               if (!svc) return null;
-              return <TradeoffCard svc={svc} ctx={ctx} onClose={() => setSelectedNodeId(null)} />;
+              return <TradeoffCard svc={svc} onClose={() => setSelectedNodeId(null)} />;
             }
             return null;
           })()}
@@ -1127,12 +1325,13 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           result={result}
           ctx={ctx}
           cost={cost}
-          collapsed={reviewCollapsed}
+          open={isReviewPanelOpen}
+          collapsed={false}
           width={reviewWidth}
           onResize={(w) => setReviewWidth(Math.min(MAX_REVIEW_W, Math.max(MIN_REVIEW_W, w)))}
           nodeCount={nodes.filter((n) => n.type === "service").length}
           onFocusLibrary={() => setLibCollapsed(false)}
-          onToggle={() => setReviewCollapsed((v) => !v)}
+          onToggle={() => setIsReviewPanelOpen(false)}
           onRun={runReview}
         />
 
@@ -1161,7 +1360,7 @@ const ToolButton = React.forwardRef<
       title={label}
       aria-label={label}
       className={cn(
-        "flex size-7 items-center justify-center rounded-md text-foreground/90 transition-colors hover:bg-accent hover:text-foreground",
+        "flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/90 transition-colors hover:bg-accent hover:text-foreground",
         active && "bg-primary/15 text-primary",
         className
       )}
@@ -1174,5 +1373,5 @@ const ToolButton = React.forwardRef<
 ToolButton.displayName = "ToolButton";
 
 function Divider() {
-  return <span className="mx-0.5 h-5 w-px bg-border" />;
+  return <span className="mx-0.5 h-5 w-px shrink-0 bg-border" />;
 }
