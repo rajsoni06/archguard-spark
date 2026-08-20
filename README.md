@@ -18,16 +18,6 @@ The platform helps developers identify architectural problems **before they beco
 
 ---
 
-## 🚀 Live Application
-
-**Live Demo:**
-https://archguard-spark.lovable.app
-
-**Development:**
-https://lovable.dev/projects/ef3c46a7-2fa3-4da8-aee6-1d28ec080bb7
-
----
-
 # 📌 Table of Contents
 
 * [Why ArchGuard AI?](#-why-archguard-ai)
