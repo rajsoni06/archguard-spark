@@ -67,6 +67,8 @@ export type Capability =
   | "data-lake"
   | "data-catalog"
   | "bi"
+  | "analytics"
+  | "ai"
   | "ml"
   | "auth"
   | "secrets"
@@ -305,10 +307,10 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "AI / ML",
         services: [
-          s("bedrock", "Bedrock", "AI / ML", Cpu, ["compute"]),
-          s("sagemaker", "SageMaker", "AI / ML", Server, ["compute"]),
+          s("bedrock", "Bedrock", "AI / ML", Cpu, ["compute", "ai"]),
+          s("sagemaker", "SageMaker", "AI / ML", Server, ["compute", "ai"]),
           s("knowledgebases", "Knowledge Bases", "AI / ML", Database, ["database"]),
-          s("aiagents", "AI Agents", "AI / ML", Users, ["compute"]),
+          s("aiagents", "AI Agents", "AI / ML", Users, ["compute", "ai"]),
         ],
       },
       {
@@ -488,17 +490,17 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("datalakegen2", "Data Lake Storage Gen2", "Analytics", Archive, ["object-storage", "data-lake"]),
           s("datacatalog", "Microsoft Purview", "Analytics", Layers, ["data-catalog"]),
           s("powerbi", "Power BI", "Analytics", BarChart3, ["bi"]),
-          s("hdinsight", "HDInsight", "Analytics", Server, ["compute"]),
+          s("hdinsight", "HDInsight", "Analytics", Server, ["compute", "analytics"]),
           s("streamanalytics", "Stream Analytics", "Analytics", Waves, ["streaming"]),
         ],
       },
       {
         name: "AI / ML",
         services: [
-          s("openai", "Azure OpenAI", "AI / ML", Cpu, ["compute"]),
-          s("machinelearning", "Machine Learning", "AI / ML", Server, ["compute"]),
-          s("cognitiveservices", "Cognitive Services", "AI / ML", Zap, ["compute"]),
-          s("botservice", "Bot Service", "AI / ML", MessageSquare, ["compute"]),
+          s("openai", "Azure OpenAI", "AI / ML", Cpu, ["compute", "ai"]),
+          s("machinelearning", "Machine Learning", "AI / ML", Server, ["compute", "ai"]),
+          s("cognitiveservices", "Cognitive Services", "AI / ML", Zap, ["compute", "ai"]),
+          s("botservice", "Bot Service", "AI / ML", MessageSquare, ["compute", "ai"]),
         ],
       },
       {
@@ -678,11 +680,11 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
       {
         name: "AI / ML",
         services: [
-          s("vertexai", "Vertex AI", "AI / ML", Cpu, ["compute"]),
-          s("cloudvision", "Cloud Vision", "AI / ML", Zap, ["compute"]),
-          s("dialogflow", "Dialogflow", "AI / ML", MessageSquare, ["compute"]),
-          s("speechtotext", "Speech-to-Text", "AI / ML", Radio, ["compute"]),
-          s("naturallanguage", "Natural Language API", "AI / ML", Layers, ["compute"]),
+          s("vertexai", "Vertex AI", "AI / ML", Cpu, ["compute", "ai"]),
+          s("cloudvision", "Cloud Vision", "AI / ML", Zap, ["compute", "ai"]),
+          s("dialogflow", "Dialogflow", "AI / ML", MessageSquare, ["compute", "ai"]),
+          s("speechtotext", "Speech-to-Text", "AI / ML", Radio, ["compute", "ai"]),
+          s("naturallanguage", "Natural Language API", "AI / ML", Layers, ["compute", "ai"]),
         ],
       },
       {

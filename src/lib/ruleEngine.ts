@@ -22,6 +22,7 @@ export interface GraphNode {
   serviceId: string;
   label: string;
   caps: Capability[];
+  cloud?: CloudId;
   boundary?: string | undefined;
 }
 
@@ -110,13 +111,41 @@ const hasTwoHopPath = (g: ArchGraph, first: Capability[], middle: Capability[], 
     g.edges.some((b) => middleIds.has(b.source) && lastIds.has(b.target));
 };
 
+const allServicesConnected = (g: ArchGraph) => {
+  if (g.nodes.length < 2) return true;
+  const adjacency = new Map(g.nodes.map((node) => [node.id, new Set<string>()]));
+  g.edges.forEach((edge) => {
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  });
+  const start = g.nodes[0]!.id;
+  const visited = new Set([start]);
+  const queue = [start];
+  while (queue.length) {
+    const current = queue.shift()!;
+    adjacency.get(current)?.forEach((id) => {
+      if (!visited.has(id)) {
+        visited.add(id);
+        queue.push(id);
+      }
+    });
+  }
+  return visited.size === g.nodes.length;
+};
+
+const hasCrossCloudPath = (g: ArchGraph) => g.edges.some((edge) => {
+  const source = g.nodes.find((node) => node.id === edge.source);
+  const target = g.nodes.find((node) => node.id === edge.target);
+  return source?.cloud && target?.cloud && source.cloud !== target.cloud;
+});
+
 
 const inPrivate = (n: GraphNode) =>
   n.boundary === "private-subnet" || n.boundary === "database-layer";
 
 const boundaryPlacementForNode = (n: GraphNode, ctx: ProjectContext) => {
   if (!n.boundary) return "Allowed" as const;
-  const svc = findService(ctx.cloud, n.serviceId);
+  const svc = findService(n.cloud || ctx.cloud, n.serviceId);
   if (!svc) return "Allowed" as const;
   return classifyBoundaryPlacement(n.boundary as any, { id: svc.id, category: svc.category, caps: svc.caps }, ctx.cloud);
 };
@@ -329,6 +358,66 @@ export const RULES: Rule[] = [
     satisfied: (g) => has(g, "archive") || has(g, "object-storage"),
   },
   // ---------------- Reliability ----------------
+  {
+    id: "topology-connected",
+    category: "Reliability",
+    severity: "high",
+    strength: "Every service participates in the application topology",
+    issue: "One or more services are disconnected from the architecture",
+    recommendation: "Connect every runtime, storage, analytics, and integration service to a purposeful upstream and downstream flow, or remove it from the design.",
+    learn: "system-design-basics",
+    applies: always,
+    satisfied: allServicesConnected,
+  },
+  {
+    id: "topology-cross-cloud",
+    category: "Reliability",
+    severity: "high",
+    strength: "Cross-cloud traffic uses an explicit integration path",
+    issue: "Services from different clouds are connected without a declared integration boundary",
+    recommendation: "Place each cloud in its own boundary and connect them through a VPN, interconnect, private endpoint, or an explicit HTTPS API integration.",
+    learn: "multi-cloud-architecture",
+    applies: always,
+    satisfied: (g) => {
+      const clouds = new Set(g.nodes.map((node) => node.cloud).filter(Boolean));
+      return clouds.size < 2 || (hasCrossCloudPath(g) && has(g, "network"));
+    },
+  },
+  {
+    id: "topology-storage-ai",
+    category: "Reliability",
+    severity: "medium",
+    strength: "AI services are reached through an application or data-access layer",
+    issue: "Block storage is connected directly to an AI or serverless service",
+    recommendation: "Attach block storage to compute or a container workload, and use object storage for serverless file access. Call AI services through an application layer rather than from a disk.",
+    learn: "ai-architecture",
+    applies: always,
+    satisfied: (g) => !g.edges.some((edge) => {
+      const source = g.nodes.find((node) => node.id === edge.source);
+      const target = g.nodes.find((node) => node.id === edge.target);
+      if (!source || !target) return false;
+      const sourceStorage = source.caps.includes("block-storage");
+      const targetStorage = target.caps.includes("block-storage");
+      const sourceInvalid = source.caps.includes("ai") || source.caps.includes("serverless") && !source.caps.includes("container");
+      const targetInvalid = target.caps.includes("ai") || target.caps.includes("serverless") && !target.caps.includes("container");
+      return sourceStorage && targetInvalid || targetStorage && sourceInvalid;
+    }),
+  },
+  {
+    id: "topology-analytics-api",
+    category: "Performance",
+    severity: "medium",
+    strength: "Analytics processing is decoupled from synchronous API traffic",
+    issue: "An API gateway connects directly to an analytics processing service",
+    recommendation: "Route the request to an application service, then publish work to a queue or data pipeline before HDInsight or another analytics engine.",
+    learn: "message-queues",
+    applies: always,
+    satisfied: (g) => !g.edges.some((edge) => {
+      const source = g.nodes.find((node) => node.id === edge.source);
+      const target = g.nodes.find((node) => node.id === edge.target);
+      return Boolean(source?.caps.includes("api-gateway") && target?.caps.includes("analytics"));
+    }),
+  },
   {
     id: "rel-async",
     category: "Reliability",

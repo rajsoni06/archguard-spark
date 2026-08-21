@@ -55,7 +55,7 @@ import { analyzeArchitecture, type AnalysisResult, type ProjectContext, type Arc
 import { computeAutoLayout } from "@/lib/autoLayout";
 import { normalizeBoundaryLayout, rectForNode, inflateRect, rectContainsRect, type DiagramNodeLike } from "@/lib/boundaryGeometry";
 import { estimateCost } from "@/lib/costEngine";
-import { loadGraph, saveGraph } from "@/lib/session";
+import { loadGraph, saveGraph, shouldSaveGraphOnUnmount } from "@/lib/session";
 import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode, type CanvasProblem } from "./nodes";
 import { ComponentLibrary, type LibraryPayload } from "./ComponentLibrary";
 import { ReviewPanel } from "./ReviewPanel";
@@ -64,7 +64,7 @@ import { TradeoffCard } from "./TradeoffCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CONNECTION_TYPES, inferConnectionType, normalizeConnectionType, type ConnectionType } from "@/lib/connectionSemantics";
+import { CONNECTION_TYPES, connectionValidationError, inferConnectionType, normalizeConnectionType, type ConnectionType } from "@/lib/connectionSemantics";
 
 const nodeTypes = { service: ServiceNode, boundary: BoundaryNode, text: TextNode };
 
@@ -680,7 +680,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
 
   useEffect(() => () => {
     if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    saveGraph(graphRef.current);
+    if (shouldSaveGraphOnUnmount()) saveGraph(graphRef.current);
   }, []);
 
   // Automatically adjust canvas when side panels are collapsed or expanded
@@ -946,6 +946,13 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         sourceData?.serviceId ? findService(sourceData.cloud || ctx.cloud, sourceData.serviceId)?.caps ?? [] : [],
         targetData?.serviceId ? findService(targetData.cloud || ctx.cloud, targetData.serviceId)?.caps ?? [] : [],
       );
+      const sourceCaps = sourceData?.serviceId ? findService(sourceData.cloud || ctx.cloud, sourceData.serviceId)?.caps ?? [] : [];
+      const targetCaps = targetData?.serviceId ? findService(targetData.cloud || ctx.cloud, targetData.serviceId)?.caps ?? [] : [];
+      const validationError = connectionValidationError(sourceCaps, targetCaps);
+      if (validationError) {
+        toast.error("Connection not recommended", { description: validationError });
+        return;
+      }
       const newEdgeId = params.id ?? nextId();
       setEdges((eds) =>
         addEdge(
@@ -1103,7 +1110,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       .map((n) => {
         const d = n.data as { serviceId: string; label: string; cloud?: CloudId };
         const svc = findService(d.cloud || ctx.cloud, d.serviceId);
-        return { id: n.id, serviceId: d.serviceId, label: d.label, caps: svc?.caps ?? [], boundary: boundaryOf(n) };
+        return { id: n.id, serviceId: d.serviceId, label: d.label, caps: svc?.caps ?? [], cloud: d.cloud || ctx.cloud, boundary: boundaryOf(n) };
       }),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, type: semanticTypeForEdge(e, nodes, ctx.cloud) })),
   }), [boundaryOf, ctx, edges, nodes]);
@@ -1581,8 +1588,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface/70 px-4 py-2.5">
-        <div className="min-w-0">
+      <header className="flex flex-nowrap items-center justify-between gap-2 border-b border-border bg-surface/70 px-4 py-2.5">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold tracking-tight">{ctx.name}</h1>
           <div className="mt-0.5 flex items-center gap-1.5">
             <Badge variant="outline" className="h-5 border-primary/30 text-[10px] text-primary">
@@ -1597,7 +1604,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-1 rounded-md bg-transparent text-foreground ml-auto mr-4">
+        <div className="ml-auto mr-2 flex shrink-0 items-center gap-1 rounded-md bg-transparent text-foreground">
           <Button variant="ghost" size="icon" className="size-8" onClick={() => zoomOut()} title="Zoom out">
             <ZoomOut className="size-4" />
           </Button>
@@ -1639,7 +1646,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             {isLocked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
           </Button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Button variant="ghost" size="sm" onClick={handleSave} title="Save image">
             <Save className="size-4" /> Save
           </Button>
