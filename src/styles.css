@@ -178,6 +178,57 @@
   --shadow-panel: 0 18px 40px -24px oklch(0 0 0 / 0.8);
 }
 
+.archguard-sidebar {
+  overflow: hidden;
+  background: var(--sidebar);
+}
+
+.archguard-sidebar-link {
+  border: 1px solid transparent;
+  color: color-mix(in oklab, var(--sidebar-foreground) 86%, transparent);
+}
+
+.archguard-sidebar-link:hover {
+  border-color: color-mix(in oklab, var(--sidebar-primary) 9%, transparent);
+  background: color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.archguard-sidebar-link--active {
+  border-color: color-mix(in oklab, var(--sidebar-primary) 12%, transparent);
+  background: color-mix(in oklab, var(--sidebar-primary) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--sidebar-primary), 0 8px 20px -16px var(--sidebar-primary);
+}
+
+.archguard-sidebar-note {
+  border-color: color-mix(in oklab, var(--sidebar-primary) 18%, var(--sidebar-border));
+  background: color-mix(in oklab, var(--sidebar-accent) 42%, transparent);
+}
+
+/* Keep ordinary canvas content in the base stacking layer. The problem-panel
+   exception below is deliberately at the maximum foreground layer. */
+.react-flow__node:not(:has(.archguard-problem-panel)) {
+  z-index: 1 !important;
+}
+
+.react-flow__edges {
+  z-index: 0 !important;
+}
+
+.react-flow__edgelabel-renderer {
+  z-index: 1 !important;
+}
+
+/* Keep an opened node problem popover above every React Flow layer, including
+   boundary nodes that receive a higher z-index during nesting calculations. */
+.react-flow__node:has(.archguard-problem-panel) {
+  z-index: 2147483647 !important;
+}
+
+.archguard-problem-panel {
+  background-color: var(--popover);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -423,7 +474,44 @@
   display: none;
 }
 .react-flow__edge-path {
-  stroke-width: 1.8;
+  stroke-width: 1.5;
+}
+.react-flow__handle.react-flow__handle {
+  width: 3px !important;
+  height: 1px !important;
+  border-radius: 50% !important;
+  opacity: 0 !important;
+}
+.react-flow__handle.connection-handle--visible {
+  opacity: 0.6 !important;
+}
+.react-flow__handle.connection-handle--corner {
+  opacity: 0 !important;
+}
+.react-flow__handle.connection-handle--corner-top-left {
+  transform: translate(-50%, -50%) !important;
+}
+.react-flow__handle.connection-handle--corner-top-right {
+  transform: translate(50%, -50%) !important;
+}
+.react-flow__handle.connection-handle--corner-bottom-left {
+  transform: translate(-50%, 50%) !important;
+}
+.react-flow__handle.connection-handle--corner-bottom-right {
+  transform: translate(50%, 50%) !important;
+}
+.react-flow__handle-left {
+  transform: translate(-50%, -50%) !important;
+}
+.react-flow__handle-right {
+  transform: translate(50%, -50%) !important;
+}
+.react-flow__edge-text {
+  font-size: 9px;
+  font-weight: 500;
+}
+.react-flow__edge-textbg {
+  opacity: 0.92;
 }
 .archflow-dash {
   stroke-dasharray: 6 6;

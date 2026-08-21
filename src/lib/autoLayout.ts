@@ -252,11 +252,13 @@ const BOUNDARY_DEPTH: Record<string, number> = {
   vpc:               1,
   az:                2,
   "security-boundary": 3,
+  "security-zone":       3,
   "public-subnet":   4,
   "private-subnet":  4,
   "database-layer":  4,
   k8s:               5,
   "service-group":   5,
+  "service-boundary": 5,
 };
 
 // Capabilities that "belong" inside each boundary kind.
@@ -266,11 +268,13 @@ const BOUNDARY_AFFINITY: Record<string, Capability[]> = {
   vpc:                 [],
   az:                  ["load-balancer","api-gateway","auth","compute","container","serverless","queue","pubsub","streaming","cache","database","nosql"],
   "security-boundary": ["cdn","waf","load-balancer","api-gateway"],
+  "security-zone":     ["cdn","waf","load-balancer","api-gateway"],
   "public-subnet":     ["cdn","waf","load-balancer","api-gateway"],
   "private-subnet":    ["compute","container","serverless","queue","pubsub","streaming","cache"],
   "database-layer":    ["database","nosql","object-storage","block-storage","archive","cache"],
   k8s:                 ["compute","container","serverless"],
   "service-group":     ["compute","container","serverless","queue","pubsub","streaming"],
+  "service-boundary":  ["compute","container","serverless","queue","pubsub","streaming"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -535,21 +539,70 @@ export function computeAutoLayout(
   });
 
   if (direction === "LR") {
-    // Dagre can leave large empty gaps when a graph has sparse ranks. Repack
-    // the rank columns to a small, consistent gap while preserving their
-    // order; nodes within a column retain dagre's vertical stacking.
-    const columns = Array.from(
-      new Set(activeNodes.map((node) => Math.round((positions[node.id]?.x ?? 0) / 8) * 8)),
-    ).sort((a, b) => a - b);
-    const columnIndex = new Map(columns.map((column, index) => [column, index]));
-    const compactGap = 18;
+    // Derive columns from the actual directed graph. The previous fixed grid
+    // discarded Dagre's dependency order and routinely produced a top row of
+    // three services plus a bottom row of three unrelated services.
+    const outgoing = new Map<string, string[]>();
+    const indegree = new Map<string, number>();
+    const rank = new Map<string, number>();
     activeNodes.forEach((node) => {
-      const position = positions[node.id];
-      if (!position) return;
-      const originalColumn = Math.round(position.x / 8) * 8;
-      const index = columnIndex.get(originalColumn);
-      if (index == null) return;
-      position.x = Math.round(COMPACT_MARGIN + index * (NODE_W + compactGap));
+      outgoing.set(node.id, []);
+      indegree.set(node.id, 0);
+      rank.set(node.id, 0);
+    });
+    layoutEdges.forEach((edge) => {
+      outgoing.get(edge.source)?.push(edge.target);
+      indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
+    });
+
+    const queue = activeNodes.filter((node) => (indegree.get(node.id) ?? 0) === 0).map((node) => node.id);
+    for (let index = 0; index < queue.length; index += 1) {
+      const source = queue[index]!;
+      (outgoing.get(source) ?? []).forEach((target) => {
+        rank.set(target, Math.max(rank.get(target) ?? 0, (rank.get(source) ?? 0) + 1));
+        const nextIndegree = (indegree.get(target) ?? 1) - 1;
+        indegree.set(target, nextIndegree);
+        if (nextIndegree === 0) queue.push(target);
+      });
+    }
+
+    const columns = new Map<number, LayoutNode[]>();
+    activeNodes.forEach((node) => {
+      const column = rank.get(node.id) ?? 0;
+      if (!columns.has(column)) columns.set(column, []);
+      columns.get(column)!.push(node);
+    });
+
+    // Preserve Dagre's crossing-aware order within each dependency column,
+    // then center smaller branches against the largest column for a balanced
+    // rectangular composition.
+    columns.forEach((columnNodes) => {
+      columnNodes.sort((a, b) => (positions[a.id]?.y ?? 0) - (positions[b.id]?.y ?? 0));
+    });
+    const maxRows = Math.max(...Array.from(columns.values(), (columnNodes) => columnNodes.length));
+    const horizontalGap = 64;
+    // Give branch rows enough breathing room for handles and routed labels.
+    // Scale gently with graph density so small diagrams stay compact while
+    // larger multi-row flows do not become visually congested.
+    const verticalGap = Math.max(
+      72,
+      Math.min(96, 66 + maxRows * 5 + Math.ceil(activeNodes.length / 6)),
+    );
+    const cellWidth = NODE_W + horizontalGap;
+    const cellHeight = NODE_H + verticalGap;
+    const usedColumns = Array.from(columns.keys()).sort((a, b) => a - b);
+    const compositionHeight = Math.max(0, (maxRows - 1) * cellHeight);
+
+    usedColumns.forEach((column, columnIndex) => {
+      const columnNodes = columns.get(column)!;
+      const columnHeight = Math.max(0, (columnNodes.length - 1) * cellHeight);
+      const top = COMPACT_MARGIN + (compositionHeight - columnHeight) / 2;
+      columnNodes.forEach((node, rowIndex) => {
+        const position = positions[node.id];
+        if (!position) return;
+        position.x = Math.round(COMPACT_MARGIN + columnIndex * cellWidth);
+        position.y = Math.round(top + rowIndex * cellHeight);
+      });
     });
   }
 
@@ -570,12 +623,12 @@ export function computeAutoLayout(
       }
     }
 
-    const COLS = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(isolatedNodes.length))));
+    const isolatedColumns = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(isolatedNodes.length))));
     const cellW = NODE_W + 28;
     const cellH = NODE_H + 28;
     isolatedNodes.forEach((n, i) => {
-      const col = direction === "LR" ? Math.floor(i / COLS) : i % COLS;
-      const row = direction === "LR" ? i % COLS : Math.floor(i / COLS);
+      const col = direction === "LR" ? Math.floor(i / isolatedColumns) : i % isolatedColumns;
+      const row = direction === "LR" ? i % isolatedColumns : Math.floor(i / isolatedColumns);
       positions[n.id] = {
         x: Math.round(gridOriginX + col * cellW),
         y: Math.round(gridOriginY + row * cellH),

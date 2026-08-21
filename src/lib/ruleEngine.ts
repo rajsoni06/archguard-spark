@@ -1,5 +1,6 @@
 import { classifyBoundaryPlacement } from "./boundaryPolicy";
 import { findService, type Capability, type CloudId } from "./catalog";
+import type { ConnectionType } from "./connectionSemantics";
 
 export interface ProjectContext {
   name: string;
@@ -28,6 +29,7 @@ export interface GraphEdge {
   id: string;
   source: string;
   target: string;
+  type: ConnectionType;
 }
 
 export interface ArchGraph {
@@ -178,6 +180,22 @@ export const RULES: Rule[] = [
     learn: "encryption",
     applies: always,
     satisfied: (g) => has(g, "encryption"),
+  },
+  {
+    id: "sec-insecure-transport",
+    category: "Security",
+    severity: "medium",
+    strength: "Sensitive communication uses an encrypted transport",
+    issue: "HTTP is used on a potentially sensitive connection",
+    recommendation: "Use HTTPS or another encrypted transport for client, identity, database, and other sensitive service communication.",
+    learn: "encryption",
+    applies: always,
+    satisfied: (g) => !g.edges.some((edge) => {
+      if (edge.type !== "HTTP") return false;
+      const source = g.nodes.find((node) => node.id === edge.source);
+      const target = g.nodes.find((node) => node.id === edge.target);
+      return source?.caps.includes("client") || target?.caps.includes("database") || target?.caps.includes("auth");
+    }),
   },
   {
     id: "sec-public-exposure",
@@ -667,6 +685,7 @@ export interface AnalysisResult {
   nodeCount: number;
   edgeCount: number;
   serviceNames: string[];
+  connections: GraphEdge[];
 }
 
 export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): AnalysisResult {
@@ -688,6 +707,7 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
       nodeCount: 0,
       edgeCount: graph.edges.length,
       serviceNames: [],
+      connections: [],
     };
   }
 
@@ -745,6 +765,7 @@ export function analyzeArchitecture(graph: ArchGraph, ctx: ProjectContext): Anal
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
     serviceNames: graph.nodes.map((node) => node.label),
+    connections: graph.edges,
   };
 }
 
@@ -762,6 +783,7 @@ export function explainAnalysis(result: AnalysisResult, ctx: ProjectContext): st
     ? `${result.serviceNames.slice(0, 7).join(", ")} and ${result.serviceNames.length - 7} more`
     : result.serviceNames.join(", ");
   const requirements = `${ctx.traffic} traffic, ${ctx.availability} availability, ${ctx.latency} latency, and ${ctx.consistency.toLowerCase()} consistency`;
+  const connectionTypes = [...new Set(result.connections.map((connection) => connection.type))].join(", ");
   const topIssues = result.issues.slice(0, 2).map((i) => i.rule.issue.toLowerCase());
   const issueSummary = topIssues.length === 0
     ? "no major rule violations"
@@ -770,7 +792,7 @@ export function explainAnalysis(result: AnalysisResult, ctx: ProjectContext): st
       : `${topIssues[0]} and ${topIssues[1]}`;
 
   return [
-    `I reviewed your ${ctx.cloud.toUpperCase()} ${ctx.pattern.toLowerCase()} canvas for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}. It contains ${result.nodeCount} components (${services}) connected by ${result.edgeCount} relationship${result.edgeCount === 1 ? "" : "s"}, with requirements for ${requirements}.`,
+    `I reviewed your ${ctx.cloud.toUpperCase()} ${ctx.pattern.toLowerCase()} canvas for a ${ctx.industry.toLowerCase()} workload at ${ctx.scale}. It contains ${result.nodeCount} components (${services}) connected by ${result.edgeCount} relationship${result.edgeCount === 1 ? "" : "s"}${connectionTypes ? ` using ${connectionTypes}` : ""}, with requirements for ${requirements}.`,
     `The architecture scores ${result.overall}/100 (${result.maturity}); ${worst?.category ?? "Security"} is the weakest area at ${worst?.score ?? 0}/100, mainly because of ${issueSummary}. ${result.issues[0] ? `My highest-impact recommendation is to ${result.issues[0].rule.recommendation.charAt(0).toLowerCase()}${result.issues[0].rule.recommendation.slice(1)}` : "The design has no major rule violations, so focus next on cost tuning and operational readiness."}`,
     result.issues[0]
       ? `My highest-impact recommendation is to ${result.issues[0].rule.recommendation.charAt(0).toLowerCase()}${result.issues[0].rule.recommendation.slice(1)}`

@@ -3,6 +3,8 @@
 import {
   Background,
   BackgroundVariant,
+  BaseEdge,
+  EdgeLabelRenderer,
   Controls,
   applyNodeChanges,
   MarkerType,
@@ -16,6 +18,7 @@ import {
   getViewportForBounds,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -53,7 +56,7 @@ import { computeAutoLayout } from "@/lib/autoLayout";
 import { normalizeBoundaryLayout, rectForNode, inflateRect, rectContainsRect, type DiagramNodeLike } from "@/lib/boundaryGeometry";
 import { estimateCost } from "@/lib/costEngine";
 import { loadGraph, saveGraph } from "@/lib/session";
-import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode } from "./nodes";
+import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode, type CanvasProblem } from "./nodes";
 import { ComponentLibrary, type LibraryPayload } from "./ComponentLibrary";
 import { ReviewPanel } from "./ReviewPanel";
 import { FailureSimulator } from "./FailureSimulator";
@@ -61,6 +64,7 @@ import { TradeoffCard } from "./TradeoffCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CONNECTION_TYPES, inferConnectionType, normalizeConnectionType, type ConnectionType } from "@/lib/connectionSemantics";
 
 const nodeTypes = { service: ServiceNode, boundary: BoundaryNode, text: TextNode };
 
@@ -71,8 +75,11 @@ const NODE_W = 176;
 const NODE_H = 66;
 const GAP = 42;
 const MIN_REVIEW_W = 300;
+const CANVAS_NODE_Z_INDEX = 1;
+const PROBLEM_NODE_Z_INDEX = 2147483647;
 const MAX_REVIEW_W = 620;
 const CANVAS_THEME_STORAGE_KEY = "archguard-canvas-theme";
+const CANVAS_THEME_EVENT = "archguard:canvas-theme-change";
 const CANVAS_LOCK_STORAGE_KEY = "archguard-canvas-locked";
 type CanvasTheme = "light" | "dark";
 
@@ -105,6 +112,338 @@ const CONNECTION_COLORS = [
 ];
 
 const connectionColor = (index: number) => CONNECTION_COLORS[index % CONNECTION_COLORS.length]!;
+
+type RoutePoint = { x: number; y: number };
+type RouteObstacle = { x: number; y: number; width: number; height: number };
+
+function compactRoutePoints(points: RoutePoint[]) {
+  const compact: RoutePoint[] = [];
+  points.forEach((point) => {
+    const previous = compact[compact.length - 1];
+    if (previous && previous.x === point.x && previous.y === point.y) return;
+    const beforePrevious = compact[compact.length - 2];
+    if (
+      beforePrevious &&
+      previous &&
+      ((beforePrevious.x === previous.x && previous.x === point.x) ||
+        (beforePrevious.y === previous.y && previous.y === point.y))
+    ) {
+      compact[compact.length - 1] = point;
+      return;
+    }
+    compact.push(point);
+  });
+  return compact;
+}
+
+function segmentHitsObstacle(a: RoutePoint, b: RoutePoint, obstacle: RouteObstacle) {
+  const padding = 10;
+  const left = obstacle.x - padding;
+  const right = obstacle.x + obstacle.width + padding;
+  const top = obstacle.y - padding;
+  const bottom = obstacle.y + obstacle.height + padding;
+
+  if (a.x === b.x) {
+    return a.x > left && a.x < right && Math.max(a.y, b.y) > top && Math.min(a.y, b.y) < bottom;
+  }
+  if (a.y === b.y) {
+    return a.y > top && a.y < bottom && Math.max(a.x, b.x) > left && Math.min(a.x, b.x) < right;
+  }
+  return false;
+}
+
+function routeHitsObstacle(points: RoutePoint[], obstacles: RouteObstacle[]) {
+  return points.slice(1).some((point, index) => {
+    const previous = points[index]!;
+    return obstacles.some((obstacle) => segmentHitsObstacle(previous, point, obstacle));
+  });
+}
+
+function routePath(source: RoutePoint, target: RoutePoint, obstacles: RouteObstacle[]) {
+  const xLanes = new Set<number>([source.x, target.x]);
+  const yLanes = new Set<number>([source.y, target.y]);
+  obstacles.forEach((obstacle) => {
+    xLanes.add(obstacle.x - 28);
+    xLanes.add(obstacle.x + obstacle.width + 28);
+    yLanes.add(obstacle.y - 28);
+    yLanes.add(obstacle.y + obstacle.height + 28);
+  });
+
+  const candidates: RoutePoint[][] = [
+    [source, { x: target.x, y: source.y }, target],
+    [source, { x: source.x, y: target.y }, target],
+    ...Array.from(xLanes, (x) => [source, { x, y: source.y }, { x, y: target.y }, target]),
+    ...Array.from(yLanes, (y) => [source, { x: source.x, y }, { x: target.x, y }, target]),
+  ];
+
+  const valid = candidates
+    .map(compactRoutePoints)
+    .filter((points) => !routeHitsObstacle(points, obstacles));
+  const best = valid.sort((a, b) => {
+    const length = (points: RoutePoint[]) => points.slice(1).reduce(
+      (total, point, index) => total + Math.abs(point.x - points[index]!.x) + Math.abs(point.y - points[index]!.y),
+      0,
+    );
+    return length(a) - length(b) || a.length - b.length;
+  })[0];
+
+  if (best) return best;
+
+  // A final outer lane is always outside the service cluster, so even dense
+  // graphs remain connected without drawing through another service.
+  const outerX = Math.max(source.x, target.x, ...obstacles.map((o) => o.x + o.width)) + 56;
+  return compactRoutePoints([source, { x: outerX, y: source.y }, { x: outerX, y: target.y }, target]);
+}
+
+function routeToSvgPath(points: RoutePoint[]) {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+}
+
+function routeLabelPlacement(points: RoutePoint[], label: string, labelLane = 0) {
+  const MIN_LABEL_GAP = 10;
+  const MIN_RUNWAY = 18;
+  if (points.length < 2) {
+    return { x: points[0]?.x ?? 0, y: points[0]?.y ?? 0, angle: 0, compact: true, tiny: true };
+  }
+  const segments = points.slice(1).map((point, index) => {
+    const start = points[index]!;
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    return { start, point, length: Math.hypot(dx, dy), angle: (Math.atan2(dy, dx) * 180) / Math.PI };
+  });
+  const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
+  // Reserve the actual label runway before choosing its position. The old
+  // midpoint-only placement could put the label directly against a node (or
+  // across a corner) because the label's width was not part of the geometry.
+  const normalRunway = label.length * 5.5 + 14;
+  const compactRunway = label.length * 4.25 + 8;
+  const compact = totalLength < Math.max(112, normalRunway + MIN_LABEL_GAP * 2 + 24);
+  const tiny = totalLength < compactRunway + MIN_LABEL_GAP * 2;
+  const runway = Math.max(MIN_RUNWAY, tiny ? compactRunway * 0.72 : compact ? compactRunway : normalRunway);
+  let remaining = totalLength / 2;
+  const midpointSegment = segments.find((candidate) => {
+    if (remaining <= candidate.length) return true;
+    remaining -= candidate.length;
+    return false;
+  }) ?? segments[segments.length - 1]!;
+  // Prefer the route midpoint, but move to the longest segment if the
+  // midpoint segment cannot contain a label with a gap on either side.
+  const segment = midpointSegment.length >= runway + MIN_LABEL_GAP * 2
+    ? midpointSegment
+    : segments.reduce((longest, candidate) => candidate.length > longest.length ? candidate : longest, segments[0]!);
+  const segmentStart = segment.start;
+  const segmentEnd = segment.point;
+  const segmentLength = segment.length;
+  const halfRunway = Math.min(runway / 2, Math.max(0, (segmentLength - MIN_LABEL_GAP * 2) / 2));
+  const minDistance = MIN_LABEL_GAP + halfRunway;
+  const maxDistance = Math.max(minDistance, segmentLength - MIN_LABEL_GAP - halfRunway);
+  const midpointDistance = midpointSegment === segment
+    ? Math.max(0, Math.min(segmentLength, remaining))
+    : segmentLength / 2;
+  // Parallel connections share the same route midpoint. Give their labels
+  // deterministic, symmetric lanes along the route so their containers do
+  // not sit on top of one another while remaining attached to the path.
+  const laneRank = labelLane === 0 ? 0 : labelLane % 2 === 1 ? -Math.ceil(labelLane / 2) : Math.ceil(labelLane / 2);
+  const laneStep = runway + MIN_LABEL_GAP * 2;
+  const distance = Math.max(minDistance, Math.min(maxDistance, midpointDistance + laneRank * laneStep));
+  const ratio = segmentLength === 0 ? 0.5 : distance / segmentLength;
+  let angle = segment.angle;
+  const isVertical = Math.abs(segment.point.x - segment.start.x) < Math.abs(segment.point.y - segment.start.y);
+  // Keep the established orientation: vertical routes keep a vertical pill,
+  // including compact labels. Only normalize the direction so text is never
+  // rendered upside down.
+  if (angle > 90) angle -= 180;
+  if (angle < -90) angle += 180;
+  return {
+    x: segmentStart.x + (segmentEnd.x - segmentStart.x) * ratio,
+    y: segmentStart.y + (segmentEnd.y - segmentStart.y) * ratio,
+    angle,
+    compact,
+    tiny,
+    isVertical,
+  };
+}
+
+function finalRouteAngle(points: RoutePoint[], target: RoutePoint) {
+  for (let index = points.length - 2; index >= 0; index -= 1) {
+    const previous = points[index]!;
+    if (previous.x !== target.x || previous.y !== target.y) {
+      return (Math.atan2(target.y - previous.y, target.x - previous.x) * 180) / Math.PI;
+    }
+  }
+  return 0;
+}
+
+function RoutedEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style, data, id, animated }: EdgeProps) {
+  const edgeData = data as { obstacles?: RouteObstacle[]; connectionType?: ConnectionType; labelLane?: number } | undefined;
+  const obstacles = edgeData?.obstacles ?? [];
+  const connectionType = normalizeConnectionType(edgeData?.connectionType);
+  const connectionLabel = connectionType === "SQL / Database Connection" ? "Database" : connectionType;
+  const path = routePath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, obstacles);
+  const endpoint = { x: targetX, y: targetY };
+  const arrowAngle = finalRouteAngle(path, endpoint);
+  const markerId = `archguard-arrow-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const arrowColor = style?.stroke ?? "var(--primary)";
+  const labelPlacement = routeLabelPlacement(path, connectionLabel, edgeData?.labelLane);
+  return (
+    <>
+      <defs>
+        <marker
+          id={markerId}
+          markerWidth="6"
+          markerHeight="6"
+          markerUnits="userSpaceOnUse"
+          viewBox="0 0 6 6"
+          refX="6"
+          refY="3"
+          orient={arrowAngle}
+        >
+          <path d="M 0 0 L 6 3 L 0 6 Z" fill={arrowColor} />
+        </marker>
+      </defs>
+      <BaseEdge
+        id={id}
+        path={routeToSvgPath(path)}
+        markerEnd={`url(#${markerId})`}
+        className={animated ? "animated" : undefined}
+        style={{
+          ...style,
+          fill: "none",
+          opacity: 1,
+          stroke: style?.stroke ?? "var(--primary)",
+          strokeWidth: 1.6,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+        }}
+        interactionWidth={22}
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="nodrag nopan pointer-events-none z-[5]"
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelPlacement.x}px,${labelPlacement.y}px)`,
+          }}
+        >
+          <div
+            className={cn(
+              "isolate whitespace-nowrap rounded border border-border bg-background text-muted-foreground shadow-sm",
+              labelPlacement.tiny
+                ? "px-0.5 py-0 text-[7px]"
+                : labelPlacement.compact
+                  ? "px-1 py-0.5 text-[8px]"
+                  : "px-1.5 py-0.5 text-[9px]",
+            )}
+            style={{ transform: `rotate(${labelPlacement.angle}deg)` }}
+          >
+            {connectionLabel}
+          </div>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { routed: RoutedEdge };
+
+function buildCanvasProblems(graph: ArchGraph, analysis: AnalysisResult): Map<string, CanvasProblem[]> {
+  const problems = new Map<string, CanvasProblem[]>();
+  const add = (ruleResult: AnalysisResult["issues"][number], ids: string[]) => {
+    if (!ids.length) return;
+    const rule = ruleResult.rule;
+    const why = rule.id === "sec-private-db"
+      ? "Public data services increase the attack surface and can expose sensitive information."
+      : rule.id === "sec-encryption" || rule.id === "comp-encryption"
+        ? "Without encryption, stolen storage or intercepted data is easier to read."
+        : rule.id === "avail-multi-az"
+          ? "A zone outage can affect every component deployed in the same zone."
+          : rule.id === "avail-db-replication" || rule.id === "spof-single-db-availability"
+            ? "A single database failure can stop reads and writes for the whole application."
+            : rule.id === "sec-public-exposure"
+              ? "Direct client access bypasses the intended security and application layers."
+              : `This issue can reduce the ${rule.category.toLowerCase()} of the architecture.`;
+    const problem: CanvasProblem = {
+      id: rule.id,
+      title: `${rule.category} Issue`,
+      severity: rule.severity,
+      description: rule.issue,
+      why,
+      recommendation: rule.recommendation,
+    };
+    ids.forEach((id) => problems.set(id, [...(problems.get(id) ?? []), problem]));
+  };
+
+  analysis.issues.forEach((issue) => {
+    const nodes = graph.nodes;
+    const dataNodes = nodes.filter((node) => node.caps.includes("database") || node.caps.includes("storage") || node.caps.includes("object-storage"));
+    const runtimeNodes = nodes.filter((node) => node.caps.includes("compute") || node.caps.includes("container") || node.caps.includes("serverless"));
+    const securityNodes = nodes.filter((node) => node.caps.includes("database") || node.caps.includes("cache") || node.caps.includes("compute") || node.caps.includes("container"));
+    let targets: string[];
+
+    switch (issue.rule.id) {
+      case "sec-private-db":
+        targets = nodes.filter((node) => node.caps.includes("database") && node.boundary !== "private-subnet" && node.boundary !== "database-layer").map((node) => node.id);
+        break;
+      case "sec-encryption":
+      case "comp-encryption":
+        targets = dataNodes.map((node) => node.id);
+        break;
+      case "sec-public-exposure":
+        targets = graph.edges
+          .filter((edge) => nodes.some((node) => node.id === edge.source && node.caps.includes("client")) && securityNodes.some((node) => node.id === edge.target))
+          .map((edge) => edge.target);
+        break;
+      case "avail-multi-az":
+        targets = [...runtimeNodes, ...dataNodes].map((node) => node.id);
+        break;
+      case "avail-db-replication":
+      case "spof-single-db-availability":
+        targets = nodes.filter((node) => node.caps.includes("database")).map((node) => node.id);
+        break;
+      case "scale-lb":
+      case "scale-autoscaling":
+      case "scale-stateless":
+      case "spof-single-backend":
+      case "capacity-bottleneck":
+        targets = runtimeNodes.map((node) => node.id);
+        break;
+      case "perf-cache":
+      case "consistency-cache-required":
+        targets = dataNodes.map((node) => node.id);
+        break;
+      case "obs-monitoring":
+      case "obs-tracing":
+        targets = [...runtimeNodes, ...dataNodes].map((node) => node.id);
+        break;
+      default:
+        targets = [...runtimeNodes, ...dataNodes].map((node) => node.id);
+        break;
+    }
+    add(issue, [...new Set(targets)]);
+  });
+  return problems;
+}
+
+function sameCanvasProblems(left: CanvasProblem[] | undefined, right: CanvasProblem[]) {
+  const a = left ?? [];
+  if (a.length !== right.length) return false;
+  return a.every((problem, index) => {
+    const next = right[index];
+    if (!next) return false;
+    return problem.id === next.id && problem.title === next.title && problem.severity === next.severity
+      && problem.description === next.description && problem.why === next.why && problem.recommendation === next.recommendation;
+  });
+}
+
+function semanticTypeForEdge(edge: Pick<Edge, "source" | "target" | "data">, nodes: Node[], cloud: CloudId): ConnectionType {
+  const source = nodes.find((node) => node.id === edge.source);
+  const target = nodes.find((node) => node.id === edge.target);
+  const sourceData = source?.data as { serviceId?: string; cloud?: CloudId } | undefined;
+  const targetData = target?.data as { serviceId?: string; cloud?: CloudId } | undefined;
+  const sourceCaps = sourceData?.serviceId ? findService(sourceData.cloud || cloud, sourceData.serviceId)?.caps ?? [] : [];
+  const targetCaps = targetData?.serviceId ? findService(targetData.cloud || cloud, targetData.serviceId)?.caps ?? [] : [];
+  return normalizeConnectionType((edge.data as { connectionType?: unknown } | undefined)?.connectionType, sourceCaps, targetCaps);
+}
 
 /** Finds the first free slot on a grid so click-added nodes never overlap. */
 function findFreeSlot(existing: Node[], origin: { x: number; y: number }) {
@@ -157,12 +496,14 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
   const wrapper = useRef<HTMLDivElement>(null);
   const past = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const future = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const graphRef = useRef<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   const pendingDelete = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const saveTimer = useRef<number | null>(null);
   const { screenToFlowPosition, fitView, zoomIn, zoomOut, deleteElements, getViewport } =
     useReactFlow();
 
@@ -182,6 +523,15 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   }, [canvasTheme]);
 
   useEffect(() => {
+    const handleAppThemeChange = (event: Event) => {
+      const nextTheme = (event as CustomEvent<CanvasTheme>).detail;
+      if (nextTheme === "light" || nextTheme === "dark") setCanvasTheme(nextTheme);
+    };
+    window.addEventListener(CANVAS_THEME_EVENT, handleAppThemeChange);
+    return () => window.removeEventListener(CANVAS_THEME_EVENT, handleAppThemeChange);
+  }, []);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(CANVAS_LOCK_STORAGE_KEY, String(isLocked));
     } catch {
@@ -192,12 +542,19 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   const canvasPalette = CANVAS_THEMES[canvasTheme];
   const renderedNodes = useMemo(
     () =>
-      isLocked
-        ? nodes.map((node) => ({
-            ...node,
-            data: { ...node.data, locked: true },
-          }))
-        : nodes,
+      nodes.map((node) => {
+        const hasProblems = node.type === "service"
+          && Array.isArray((node.data as { problems?: unknown[] }).problems)
+          && (node.data as { problems: unknown[] }).problems.length > 0;
+
+        return {
+          ...node,
+          ...(node.type === "service"
+            ? { zIndex: hasProblems ? PROBLEM_NODE_Z_INDEX : CANVAS_NODE_Z_INDEX }
+            : {}),
+          data: isLocked ? { ...node.data, locked: true } : node.data,
+        };
+      }),
     [isLocked, nodes],
   );
 
@@ -269,12 +626,20 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   useEffect(() => {
     const stored = loadGraph();
     if (stored?.nodes?.length || stored?.edges?.length) {
-      commitNodes(stored.nodes as Node[]);
-      setEdges(stored.edges as Edge[]);
+      const restoredNodes = stored.nodes as Node[];
+      commitNodes(restoredNodes);
+      setEdges((stored.edges as Edge[]).map((edge) => ({
+        ...edge,
+        data: {
+          ...(edge.data ?? {}),
+          connectionType: semanticTypeForEdge(edge, restoredNodes, ctx.cloud),
+          labelLane: (stored.edges as Edge[]).filter((candidate) => candidate.source === edge.source && candidate.target === edge.target && candidate.id < edge.id).length,
+        },
+      })));
       setTimeout(() => fitView({ padding: 0.2 }), 80);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commitNodes]);
+  }, [commitNodes, ctx.cloud]);
 
   useEffect(() => {
     commitNodes((nds) => {
@@ -296,8 +661,27 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
   }, [commitNodes, ctx.cloud]);
 
   useEffect(() => {
-    saveGraph({ nodes, edges });
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveGraph({ nodes, edges });
+      saveTimer.current = null;
+    }, 250);
+    return () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    };
   }, [nodes, edges]);
+
+  // Keep delete handling based on the latest committed graph. This ref avoids
+  // putting graph snapshots into React state and therefore cannot disturb the
+  // canvas viewport, selection, or open panels.
+  useEffect(() => {
+    graphRef.current = { nodes, edges };
+  }, [nodes, edges]);
+
+  useEffect(() => () => {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveGraph(graphRef.current);
+  }, []);
 
   // Automatically adjust canvas when side panels are collapsed or expanded
   useEffect(() => {
@@ -348,14 +732,6 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     setEdges(next.edges);
   };
 
-  const restore = useCallback(
-    (state: { nodes: Node[]; edges: Edge[] }) => {
-      commitNodes(state.nodes);
-      setEdges(state.edges);
-    },
-    [commitNodes, setEdges],
-  );
-
   // React Flow already strips edges attached to a removed node; we only add the
   // snapshot + undo affordance around it so deletion is safe.
   const onBeforeDelete = useCallback(async () => {
@@ -375,17 +751,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       if (!before || removed.length === 0) return;
       past.current = [...past.current.slice(-40), before];
       future.current = [];
-      const label =
-        removed.length === 1
-          ? `${(removed[0]!.data as { label?: string }).label ?? "Component"} removed from architecture.`
-          : `${removed.length} components removed from architecture.`;
-      toast(label, {
-        description: "Connected links were removed too.",
-        action: { label: "Undo", onClick: () => restore(before) },
-        duration: 7000,
-      });
     },
-    [isLocked, restore],
+    [isLocked],
   );
 
   // Delete affordance rendered on each node dispatches through React Flow so
@@ -448,7 +815,6 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           } as Node,
         ];
       });
-      toast.success(`${payload.label} added to canvas`, { duration: 1800 });
       const vp2 = getViewport();
       if ((vp2.zoom ?? 1) > 1.25) void zoomOut();
     },
@@ -475,8 +841,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         const tCy = tgt.position.y + tH / 2;
         const dx = tCx - sCx;
         const dy = tCy - sCy;
-        const sourceCandidates = ["right", "bottom"];
-        const targetCandidates = ["left", "top"];
+        const sourceCandidates = ["right", "bottom", "bottom-right", "bottom-left", "bottom-quarter-left", "bottom-quarter-right", "bottom-eighth-left", "bottom-eighth-right", "bottom-three-eighths-left", "bottom-three-eighths-right", "right-quarter-top", "right-quarter-bottom", "right-eighth-top"];
+        const targetCandidates = ["left", "top", "top-left", "top-right", "top-quarter-left", "top-quarter-right", "top-eighth-left", "top-eighth-right", "top-three-eighths-left", "top-three-eighths-right", "left-quarter-top", "left-quarter-bottom", "left-eighth-top"];
         const handlePoint = (n: Node, h: string) => {
           const w = Number(n.style?.width ?? NODE_W);
           const hgt = Number(n.style?.height ?? NODE_H);
@@ -485,29 +851,83 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           switch (h) {
             case "top":
               return { x: cx, y: n.position.y };
+            case "top-left":
+              return { x: n.position.x + 8, y: n.position.y };
+            case "top-right":
+              return { x: n.position.x + w - 8, y: n.position.y };
+            case "top-quarter-left":
+              return { x: n.position.x + w / 4, y: n.position.y };
+            case "top-quarter-right":
+              return { x: n.position.x + (w * 3) / 4, y: n.position.y };
+            case "top-eighth-left":
+              return { x: n.position.x + w / 8, y: n.position.y };
+            case "top-eighth-right":
+              return { x: n.position.x + (w * 7) / 8, y: n.position.y };
+            case "top-three-eighths-left":
+              return { x: n.position.x + (w * 3) / 8, y: n.position.y };
+            case "top-three-eighths-right":
+              return { x: n.position.x + (w * 5) / 8, y: n.position.y };
+            case "left-quarter-top":
+              return { x: n.position.x, y: n.position.y + (hgt * 3) / 8 };
+            case "left-quarter-bottom":
+              return { x: n.position.x, y: n.position.y + (hgt * 5) / 8 };
+            case "left-eighth-top":
+              return { x: n.position.x, y: n.position.y + hgt / 8 };
             case "bottom":
               return { x: cx, y: n.position.y + hgt };
+            case "bottom-left":
+              return { x: n.position.x + 8, y: n.position.y + hgt };
+            case "bottom-right":
+              return { x: n.position.x + w - 8, y: n.position.y + hgt };
+            case "bottom-quarter-left":
+              return { x: n.position.x + w / 4, y: n.position.y + hgt };
+            case "bottom-quarter-right":
+              return { x: n.position.x + (w * 3) / 4, y: n.position.y + hgt };
+            case "bottom-eighth-left":
+              return { x: n.position.x + w / 8, y: n.position.y + hgt };
+            case "bottom-eighth-right":
+              return { x: n.position.x + (w * 7) / 8, y: n.position.y + hgt };
+            case "bottom-three-eighths-left":
+              return { x: n.position.x + (w * 3) / 8, y: n.position.y + hgt };
+            case "bottom-three-eighths-right":
+              return { x: n.position.x + (w * 5) / 8, y: n.position.y + hgt };
+            case "right-quarter-top":
+              return { x: n.position.x + w, y: n.position.y + (hgt * 3) / 8 };
+            case "right-quarter-bottom":
+              return { x: n.position.x + w, y: n.position.y + (hgt * 5) / 8 };
+            case "right-eighth-top":
+              return { x: n.position.x + w, y: n.position.y + hgt / 8 };
             case "left":
-              return { x: n.position.x, y: cy };
+              return { x: n.position.x, y: n.position.y + hgt / 2 };
             default:
-              return { x: n.position.x + w, y: cy };
+              return { x: n.position.x + w, y: n.position.y + hgt / 2 };
           }
         };
+
+        const obstacles = nodes
+          .filter((node) => node.type === "service" && node.id !== srcId && node.id !== tgtId)
+          .map((node) => ({
+            x: node.position.x,
+            y: node.position.y,
+            width: Number(node.style?.width ?? NODE_W),
+            height: Number(node.style?.height ?? NODE_H),
+          }));
 
         let best: { s?: string; t?: string; d?: number } = { d: Infinity };
         for (const sHc of sourceCandidates) {
           for (const tHc of targetCandidates) {
             const p1 = handlePoint(src, sHc);
             const p2 = handlePoint(tgt, tHc);
-            const dd = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-            // bias toward horizontal when dx dominates, vertical when dy dominates
-            let bias = 0;
-            if (Math.abs(dx) > Math.abs(dy) * 1.2) {
-              if (sHc === "right" && tHc === "left") bias -= 8;
-            } else if (Math.abs(dy) > Math.abs(dx) * 1.2) {
-              if (sHc === "bottom" && tHc === "top") bias -= 8;
-            }
-            const score = dd + bias;
+            const route = routePath(p1, p2, obstacles);
+            const routeLength = route.slice(1).reduce(
+              (total, point, index) => total + Math.abs(point.x - route[index]!.x) + Math.abs(point.y - route[index]!.y),
+              0,
+            );
+            const turns = Math.max(0, route.length - 2);
+            const directionBias = Math.abs(dx) > Math.abs(dy) * 1.2
+              ? (sHc === "right" && tHc === "left" ? -12 : 0)
+              : Math.abs(dy) > Math.abs(dx) * 1.2 && sHc === "bottom" && tHc === "top" ? -12 : 0;
+            const score = routeLength + turns * 18 + directionBias;
             if (score < (best.d ?? Infinity)) best = { s: sHc, t: tHc, d: score };
           }
         }
@@ -518,21 +938,45 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       };
 
       const handles = pickHandles(params.source, params.target);
+      const sourceNode = nodes.find((node) => node.id === params.source);
+      const targetNode = nodes.find((node) => node.id === params.target);
+      const sourceData = sourceNode?.data as { serviceId?: string; cloud?: CloudId } | undefined;
+      const targetData = targetNode?.data as { serviceId?: string; cloud?: CloudId } | undefined;
+      const defaultConnectionType = inferConnectionType(
+        sourceData?.serviceId ? findService(sourceData.cloud || ctx.cloud, sourceData.serviceId)?.caps ?? [] : [],
+        targetData?.serviceId ? findService(targetData.cloud || ctx.cloud, targetData.serviceId)?.caps ?? [] : [],
+      );
+      const newEdgeId = params.id ?? nextId();
       setEdges((eds) =>
         addEdge(
           {
             ...params,
+            id: newEdgeId,
             ...handles,
-            type: "smoothstep",
+            type: "routed",
+            data: {
+              connectionType: defaultConnectionType,
+              labelLane: eds.filter((edge) => edge.source === params.source && edge.target === params.target).length,
+              obstacles: nodes
+                .filter((node) => node.type === "service" && node.id !== params.source && node.id !== params.target)
+                .map((node) => ({
+                  x: node.position.x,
+                  y: node.position.y,
+                  width: Number(node.style?.width ?? NODE_W),
+                  height: Number(node.style?.height ?? NODE_H),
+                })),
+            },
             animated: true,
+            zIndex: 1,
             style: { stroke: connectionColor(eds.length) },
-            markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(eds.length) },
+            markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(eds.length), width: 12, height: 12 },
           },
           eds,
         ),
       );
+      setSelectedEdgeId(newEdgeId);
     },
-    [isLocked, setEdges, snapshot, nodes],
+    [ctx.cloud, isLocked, setEdges, snapshot, nodes],
   );
 
   const onDrop = useCallback(
@@ -596,6 +1040,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       });
       const priority = [
         "database-layer",
+        "service-boundary",
+        "security-zone",
         "private-subnet",
         "public-subnet",
         "k8s",
@@ -649,8 +1095,9 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
     });
   }, []);
 
-  // Build the ArchGraph for the Failure Simulator
-  const buildGraph = (): ArchGraph => ({
+  // Build the ArchGraph used by both the deterministic review and the
+  // failure simulator so both paths always evaluate the same graph.
+  const buildGraph = useCallback<() => ArchGraph>(() => ({
     nodes: nodes
       .filter((n) => n.type === "service")
       .map((n) => {
@@ -658,8 +1105,59 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         const svc = findService(d.cloud || ctx.cloud, d.serviceId);
         return { id: n.id, serviceId: d.serviceId, label: d.label, caps: svc?.caps ?? [], boundary: boundaryOf(n) };
       }),
-    edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-  });
+    edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, type: semanticTypeForEdge(e, nodes, ctx.cloud) })),
+  }), [boundaryOf, ctx, edges, nodes]);
+
+  // Ignore transient UI fields written after analysis. Geometry and semantic
+  // data remain included because boundaries and connection types affect rules.
+  const architectureSignature = useMemo(
+    () => JSON.stringify({
+      context: ctx,
+      nodes: nodes.map((node) => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        style: node.style,
+        data: node.data && Object.fromEntries(
+          Object.entries(node.data).filter(([key]) => key !== "problems" && key !== "locked"),
+        ),
+      })),
+      edges: edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        connectionType: (edge.data as { connectionType?: unknown } | undefined)?.connectionType,
+      })),
+    }),
+    [ctx, edges, nodes],
+  );
+
+  const applyAnalysis = useCallback((graph: ArchGraph) => {
+    const analysis = analyzeArchitecture(graph, ctx);
+    setResult(analysis);
+    const canvasProblems = buildCanvasProblems(graph, analysis);
+    setNodes((current) => {
+      let changed = false;
+      const next = current.map((node) => {
+        if (node.type !== "service") return node;
+        const problems = canvasProblems.get(node.id) ?? [];
+        const existing = (node.data as { problems?: CanvasProblem[] }).problems;
+        if (sameCanvasProblems(existing, problems)) return node;
+        changed = true;
+        return { ...node, data: { ...node.data, problems } };
+      });
+      return changed ? next : current;
+    });
+    return analysis;
+  }, [ctx, setNodes]);
+
+  // Recalculate locally as soon as the committed graph changes. Only
+  // persistence is deferred; visual canvas interactions are never debounced.
+  useEffect(() => {
+    applyAnalysis(buildGraph());
+    // architectureSignature excludes the result decorations written above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [architectureSignature]);
 
   const runReview = () => {
     if (nodes.filter((n) => n.type === "service").length === 0) {
@@ -669,26 +1167,21 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       });
       return;
     }
-    const graph = {
-      nodes: nodes
-        .filter((n) => n.type === "service")
-        .map((n) => {
-          const d = n.data as { serviceId: string; label: string; cloud?: CloudId };
-          const svc = findService(d.cloud || ctx.cloud, d.serviceId);
-          return {
-            id: n.id,
-            serviceId: d.serviceId,
-            label: d.label,
-            caps: svc?.caps ?? [],
-            boundary: boundaryOf(n),
-          };
-        }),
-      edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-    };
-    const analysis = analyzeArchitecture(graph, ctx);
-    setResult(analysis);
+    const analysis = applyAnalysis(buildGraph());
     setIsReviewPanelOpen(true);
     toast.success(`Review complete — ${analysis.overall}/100 · ${analysis.maturity}`);
+  };
+
+  const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined;
+  const selectedEdgeType = selectedEdge ? semanticTypeForEdge(selectedEdge, nodes, ctx.cloud) : undefined;
+  const updateSelectedEdgeType = (connectionType: ConnectionType) => {
+    if (!selectedEdgeId || isLocked) return;
+    snapshot();
+    setEdges((current) => current.map((edge) =>
+      edge.id === selectedEdgeId
+        ? { ...edge, data: { ...(edge.data ?? {}), connectionType } }
+        : edge,
+    ));
   };
 
   const autoLayout = (dirOverride?: "LR" | "TB") => {
@@ -775,82 +1268,76 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
       const sW = NODE_W;
       const sH = NODE_H;
       const tW = NODE_W;
-      const tH = NODE_H;
 
       const handlePoint = (pos: { x: number; y: number }, h: string) => {
         const cx = pos.x + sW / 2;
         const cy = pos.y + sH / 2;
         switch (h) {
-          case "top":    return { x: cx, y: pos.y };
-          case "bottom": return { x: cx, y: pos.y + tH };
-          case "left":   return { x: pos.x, y: cy };
-          default:       return { x: pos.x + tW, y: cy };
+          case "top":          return { x: cx, y: pos.y };
+          case "top-left":     return { x: pos.x + 8, y: pos.y };
+          case "top-right":    return { x: pos.x + tW - 8, y: pos.y };
+          case "top-quarter-left":  return { x: pos.x + tW / 4, y: pos.y };
+          case "top-quarter-right": return { x: pos.x + (tW * 3) / 4, y: pos.y };
+          case "top-eighth-left":  return { x: pos.x + tW / 8, y: pos.y };
+          case "top-eighth-right": return { x: pos.x + (tW * 7) / 8, y: pos.y };
+          case "top-three-eighths-left":  return { x: pos.x + (tW * 3) / 8, y: pos.y };
+          case "top-three-eighths-right": return { x: pos.x + (tW * 5) / 8, y: pos.y };
+          case "left-quarter-top":     return { x: pos.x, y: pos.y + (sH * 3) / 8 };
+          case "left-quarter-bottom":  return { x: pos.x, y: pos.y + (sH * 5) / 8 };
+          case "left-eighth-top":       return { x: pos.x, y: pos.y + sH / 8 };
+          case "bottom":       return { x: cx, y: pos.y + sH };
+          case "bottom-left":  return { x: pos.x + 8, y: pos.y + sH };
+          case "bottom-right": return { x: pos.x + tW - 8, y: pos.y + sH };
+          case "bottom-quarter-left":  return { x: pos.x + tW / 4, y: pos.y + sH };
+          case "bottom-quarter-right": return { x: pos.x + (tW * 3) / 4, y: pos.y + sH };
+          case "bottom-eighth-left":  return { x: pos.x + tW / 8, y: pos.y + sH };
+          case "bottom-eighth-right": return { x: pos.x + (tW * 7) / 8, y: pos.y + sH };
+          case "bottom-three-eighths-left":  return { x: pos.x + (tW * 3) / 8, y: pos.y + sH };
+          case "bottom-three-eighths-right": return { x: pos.x + (tW * 5) / 8, y: pos.y + sH };
+          case "right-quarter-top":    return { x: pos.x + tW, y: pos.y + (sH * 3) / 8 };
+          case "right-quarter-bottom": return { x: pos.x + tW, y: pos.y + (sH * 5) / 8 };
+          case "right-eighth-top":      return { x: pos.x + tW, y: pos.y + sH / 8 };
+          case "left":         return { x: pos.x, y: pos.y + sH / 2 };
+          default:              return { x: pos.x + tW, y: pos.y + sH / 2 };
         }
       };
 
       const srcPos = src.position;
       const tgtPos = tgt.position;
 
-      // Determine directional relationship between the two nodes
-      const dx = (tgtPos.x + tW / 2) - (srcPos.x + sW / 2);
-      const dy = (tgtPos.y + tH / 2) - (srcPos.y + sH / 2);
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
+      const sourceHandles = activeDirection === "LR"
+        ? ["right", "bottom-right", "bottom-left", "bottom-quarter-left", "bottom-quarter-right", "bottom-eighth-left", "bottom-eighth-right", "bottom-three-eighths-left", "bottom-three-eighths-right", "right-quarter-top", "right-quarter-bottom", "right-eighth-top"]
+        : ["bottom", "bottom-right", "bottom-left", "bottom-quarter-left", "bottom-quarter-right", "bottom-eighth-left", "bottom-eighth-right", "bottom-three-eighths-left", "bottom-three-eighths-right", "right-quarter-top", "right-quarter-bottom", "right-eighth-top"];
+      const targetHandles = activeDirection === "LR"
+        ? ["left", "top-left", "top-right", "top-quarter-left", "top-quarter-right", "top-eighth-left", "top-eighth-right", "top-three-eighths-left", "top-three-eighths-right", "left-quarter-top", "left-quarter-bottom", "left-eighth-top"]
+        : ["top", "top-left", "top-right", "top-quarter-left", "top-quarter-right", "top-eighth-left", "top-eighth-right", "top-three-eighths-left", "top-three-eighths-right", "left-quarter-top", "left-quarter-bottom", "left-eighth-top"];
+      const obstacles = newNodes
+        .filter((node) => node.type === "service" && node.id !== srcId && node.id !== tgtId)
+        .map((node) => ({ x: node.position.x, y: node.position.y, width: NODE_W, height: NODE_H }));
 
-      let preferredSrc: string;
-      let preferredTgt: string;
-
-      if (activeDirection === "LR") {
-        // Primary: Right → Left (horizontal flow)
-        // Only fall back to vertical handles if nodes are nearly on the same X
-        if (absDx >= absDy * 0.5) {
-          preferredSrc = "right";
-          preferredTgt = "left";
-        } else {
-          preferredSrc = "bottom";
-          preferredTgt = "top";
-        }
-      } else {
-        // TB: Primary: Bottom → Top (vertical flow)
-        // Only fall back to horizontal handles if nodes are nearly on the same Y
-        if (absDy >= absDx * 0.5) {
-          preferredSrc = "bottom";
-          preferredTgt = "top";
-        } else {
-          preferredSrc = "right";
-          preferredTgt = "left";
-        }
-      }
-
-      // If the preferred handle combination is already heavily used,
-      // compute an alternative by slightly rotating the preference.
-      const srcUsage = handleUsage.get(`${srcId}-${preferredSrc}`) ?? 0;
-      const tgtUsage = handleUsage.get(`${tgtId}-${preferredTgt}`) ?? 0;
-
-      let finalSrc = preferredSrc;
-      let finalTgt = preferredTgt;
-
-      // When a handle is overloaded (≥2 edges), pick the best available alternative
-      if (srcUsage >= 2 || tgtUsage >= 2) {
-        const sourceHandles = ["right", "bottom"];
-        const targetHandles = ["left", "top"];
-        let bestScore = Infinity;
-
-        for (const sHc of sourceHandles) {
-          for (const tHc of targetHandles) {
-            const p1 = handlePoint(srcPos, sHc);
-            const p2 = handlePoint(tgtPos, tHc);
-            const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-            const su = handleUsage.get(`${srcId}-${sHc}`) ?? 0;
-            const tu = handleUsage.get(`${tgtId}-${tHc}`) ?? 0;
-            const score = dist + su * 200 + tu * 200
-              + (sHc === preferredSrc ? 0 : 100)
-              + (tHc === preferredTgt ? 0 : 100);
-            if (score < bestScore) {
-              bestScore = score;
-              finalSrc = sHc;
-              finalTgt = tHc;
-            }
+      // Choose the shortest collision-free route, with a small penalty for
+      // extra turns and already-busy handles. The router and the handle
+      // selector therefore optimize the same geometry.
+      let bestScore = Infinity;
+      let finalSrc = sourceHandles[0]!;
+      let finalTgt = targetHandles[0]!;
+      for (const sourceHandle of sourceHandles) {
+        for (const targetHandle of targetHandles) {
+          const sourcePoint = handlePoint(srcPos, sourceHandle);
+          const targetPoint = handlePoint(tgtPos, targetHandle);
+          const route = routePath(sourcePoint, targetPoint, obstacles);
+          const routeLength = route.slice(1).reduce(
+            (total, point, index) => total + Math.abs(point.x - route[index]!.x) + Math.abs(point.y - route[index]!.y),
+            0,
+          );
+          const turns = Math.max(0, route.length - 2);
+          const sourceUsage = handleUsage.get(`${srcId}-${sourceHandle}`) ?? 0;
+          const targetUsage = handleUsage.get(`${tgtId}-${targetHandle}`) ?? 0;
+          const score = routeLength + turns * 18 + sourceUsage * 42 + targetUsage * 42;
+          if (score < bestScore) {
+            bestScore = score;
+            finalSrc = sourceHandle;
+            finalTgt = targetHandle;
           }
         }
       }
@@ -871,11 +1358,18 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
         source: e.source,
         target: e.target,
         ...pickHandlesForIds(e.source, e.target),
-        type: "smoothstep",
-        pathOptions: { offset: 18, borderRadius: 10 },
+        type: "routed",
+        data: {
+          connectionType: semanticTypeForEdge(e, newNodes, ctx.cloud),
+          labelLane: flowEdges.slice(0, i).filter((candidate) => candidate.source === e.source && candidate.target === e.target).length,
+          obstacles: newNodes
+            .filter((node) => node.type === "service" && node.id !== e.source && node.id !== e.target)
+            .map((node) => ({ x: node.position.x, y: node.position.y, width: NODE_W, height: NODE_H })),
+        },
         animated: true,
+        zIndex: 1,
         style: { stroke: connectionColor(i) },
-        markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(i) },
+        markerEnd: { type: MarkerType.ArrowClosed, color: connectionColor(i), width: 12, height: 12 },
       })),
     );
 
@@ -922,7 +1416,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           id: nextId(),
           type: "boundary",
           position: { x: 40, y: 40 },
-          data: { kind: "service-group", label: getBoundaryLabel("service-group", ctx.cloud), cloud: ctx.cloud },
+          data: { kind: "service-boundary", label: getBoundaryLabel("service-boundary", ctx.cloud), cloud: ctx.cloud },
           style: { width: 400, height: 260 },
         } as Node,
         ...nds,
@@ -1270,19 +1764,28 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             onDrop={onDrop}
             onBeforeDelete={onBeforeDelete}
             onDelete={onDelete}
+            onEdgeClick={(_, edge) => {
+              setSelectedEdgeId(edge.id);
+              setSelectedNodeId(null);
+            }}
             onNodeClick={(_, node) => {
+              setSelectedEdgeId(null);
               if (node.type === "service") {
                 setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
               } else {
                 setSelectedNodeId(null);
               }
             }}
-            onPaneClick={() => setSelectedNodeId(null)}
+            onPaneClick={() => {
+              setSelectedNodeId(null);
+              setSelectedEdgeId(null);
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = isLocked || tool === "pan" ? "none" : "move";
             }}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             panOnDrag={isLocked || tool === "pan" ? true : [1, 2]}
             selectionOnDrag={!isLocked && tool === "select"}
             nodesDraggable={!isLocked && tool === "select"}
@@ -1299,6 +1802,34 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
               color={canvasPalette.grid}
             />
           </ReactFlow>
+
+          {selectedEdge && selectedEdgeType ? (
+            <div className="absolute right-3 top-3 z-30 w-56 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-semibold">Connection Semantics</div>
+                  <div className="text-[10px] text-muted-foreground">Choose how these services communicate</div>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  aria-label="Close connection editor"
+                  onClick={() => setSelectedEdgeId(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <select
+                value={selectedEdgeType}
+                disabled={isLocked}
+                onChange={(event) => updateSelectedEdgeType(event.target.value as ConnectionType)}
+                className="h-8 w-full rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:border-primary"
+                aria-label="Connection type"
+              >
+                {CONNECTION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+            </div>
+          ) : null}
 
           {nodes.length === 0 ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -1333,6 +1864,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           onFocusLibrary={() => setLibCollapsed(false)}
           onToggle={() => setIsReviewPanelOpen(false)}
           onRun={runReview}
+          onScoreTabClick={runReview}
         />
 
         {/* Failure Simulator Modal */}

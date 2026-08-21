@@ -33,6 +33,7 @@ interface Props {
   onFocusLibrary: () => void;
   onToggle: () => void;
   onRun: () => void;
+  onScoreTabClick: () => void;
 }
 
 export function ReviewPanel({
@@ -47,6 +48,7 @@ export function ReviewPanel({
   onFocusLibrary,
   onToggle,
   onRun,
+  onScoreTabClick,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -169,7 +171,7 @@ export function ReviewPanel({
               <TabsTrigger value="analysis" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Analysis
               </TabsTrigger>
-              <TabsTrigger value="score" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+              <TabsTrigger value="score" onClick={onScoreTabClick} className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Score
               </TabsTrigger>
               <TabsTrigger value="cost" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">

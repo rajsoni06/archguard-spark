@@ -21,6 +21,7 @@ import {
   Route,
   Scale,
   Server,
+  Settings,
   Shield,
   ShieldCheck,
   Signal,
@@ -135,6 +136,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("eks", "EKS", "Compute", Boxes, ["container", "compute"]),
           s("fargate", "Fargate", "Compute", Cpu, ["container", "compute"]),
           s("asg", "Auto Scaling", "Compute", Scale, ["autoscaling"]),
+          s("autoscaling-group", "Auto Scaling Group", "Compute", Scale, ["autoscaling"]),
         ],
       },
       {
@@ -150,6 +152,10 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("reverse-proxy", "Reverse Proxy", "Networking", Route, ["reverse-proxy", "load-balancer"]),
           s("route53", "Route 53", "Networking", Route, ["dns"]),
           s("transit-gateway", "Transit Gateway", "Networking", Network, ["network"]),
+          s("target-group", "Target Group", "Networking", Split, ["load-balancer"]),
+          s("kubernetes-ingress", "Ingress", "Networking", Route, ["reverse-proxy", "load-balancer"]),
+          s("availability-zone", "Availability Zone", "Networking", Globe, ["network", "failover"]),
+          s("private-link", "PrivateLink", "Networking", Network, ["private-network"]),
         ],
       },
       {
@@ -159,6 +165,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("ebs", "EBS", "Storage", HardDrive, ["block-storage"]),
           s("efs", "EFS", "Storage", HardDrive, ["block-storage"]),
           s("glacier", "Glacier", "Storage", Archive, ["archive"]),
+          s("s3-bucket", "S3 Bucket", "Storage", Archive, ["object-storage"]),
+          s("s3-object", "S3 Object", "Storage", Archive, ["object-storage"]),
         ],
       },
       {
@@ -170,6 +178,12 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("elasticache", "ElastiCache", "Database", Gauge, ["cache"]),
           s("opensearch", "OpenSearch", "Database", Database, ["database", "search"]),
           s("redshift", "Redshift", "Database", Database, ["database", "warehouse"]),
+          s("rds-proxy", "RDS Proxy", "Database", Network, ["database", "managed-database"]),
+          s("rds-read-replica", "RDS Read Replica", "Database", Database, ["database", "read-replica", "replication"]),
+          s("rds-multi-az", "RDS Multi-AZ", "Database", Database, ["database", "managed-database", "failover"]),
+          s("dax", "DynamoDB Accelerator (DAX)", "Database", Gauge, ["cache", "database"]),
+          s("documentdb", "DocumentDB", "Database", Database, ["database", "nosql"]),
+          s("keyspaces", "Keyspaces for Apache Cassandra", "Database", Database, ["database", "nosql"]),
         ],
       },
       {
@@ -185,6 +199,42 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
         ],
       },
       {
+        name: "API & Application Integration",
+        services: [
+          s("api-rest", "API Gateway REST API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("api-http", "API Gateway HTTP API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("api-websocket", "API Gateway WebSocket API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("api-endpoint", "API Gateway Endpoint", "API & Application Integration", Route, ["api-gateway"]),
+          s("lambda-integration", "Lambda Integration", "API & Application Integration", Zap, ["api-gateway", "serverless"]),
+          s("api-authentication", "API Gateway Authentication", "API & Application Integration", ShieldCheck, ["api-gateway", "auth"]),
+          s("api-authorizer", "API Gateway Authorizer", "API & Application Integration", ShieldCheck, ["api-gateway", "auth"]),
+          s("api-mapping", "API Gateway Mapping", "API & Application Integration", Split, ["api-gateway"]),
+          s("api-cache", "API Gateway Cache", "API & Application Integration", Gauge, ["api-gateway", "cache"]),
+        ],
+      },
+      {
+        name: "Containers & Kubernetes",
+        services: [
+          s("ecr-container", "Elastic Container Registry (ECR)", "Containers & Kubernetes", Archive, ["container", "object-storage"]),
+          s("kubernetes-cluster", "Kubernetes Cluster", "Containers & Kubernetes", Boxes, ["container"]),
+          s("kubernetes-pod", "Kubernetes Pod", "Containers & Kubernetes", Container, ["container"]),
+          s("kubernetes-service", "Kubernetes Service", "Containers & Kubernetes", Network, ["container", "network"]),
+          s("kubernetes-ingress-resource", "Kubernetes Ingress", "Containers & Kubernetes", Route, ["container", "reverse-proxy"]),
+          s("alb-ingress", "ALB Ingress", "Containers & Kubernetes", Scale, ["container", "load-balancer"]),
+          s("replicaset", "Kubernetes ReplicaSet", "Containers & Kubernetes", Boxes, ["container", "autoscaling"]),
+          s("cluster-autoscaler", "Cluster Autoscaler", "Containers & Kubernetes", Scale, ["container", "autoscaling"]),
+          s("kubernetes-node", "Kubernetes Node", "Containers & Kubernetes", Server, ["container", "compute"]),
+        ],
+      },
+      {
+        name: "Caching",
+        services: [
+          s("redis", "ElastiCache for Redis", "Caching", Gauge, ["cache"]),
+          s("memcached", "ElastiCache for Memcached", "Caching", Gauge, ["cache"]),
+          s("cloudfront-cache", "CloudFront Cache", "Caching", Globe, ["cache", "cdn"]),
+        ],
+      },
+      {
         name: "Security",
         services: [
           s("iam", "IAM", "Security", ShieldCheck, ["auth"]),
@@ -194,6 +244,13 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("waf", "WAF", "Security", Shield, ["waf"]),
           s("shield", "Shield", "Security", ShieldCheck, ["waf"]),
           s("guardduty", "GuardDuty", "Security", Shield, ["monitoring"]),
+          s("iam-user", "IAM User", "Security", Users, ["auth"]),
+          s("iam-role", "IAM Role", "Security", ShieldCheck, ["auth"]),
+          s("iam-policy", "IAM Policy", "Security", FileKey, ["auth"]),
+          s("cognito-user-pool", "Cognito User Pool", "Security", Users, ["auth"]),
+          s("cognito-identity-pool", "Cognito Identity Pool", "Security", Users, ["auth"]),
+          s("security-group", "EC2 Security Group", "Security", Lock, ["private-network"]),
+          s("network-acl", "Network ACL (NACL)", "Security", Lock, ["private-network"]),
         ],
       },
       {
@@ -203,6 +260,9 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("cloudtrail", "CloudTrail", "Monitoring", Activity, ["monitoring"]),
           s("xray", "X-Ray", "Monitoring", Activity, ["tracing"]),
           s("config", "AWS Config", "Monitoring", Activity, ["monitoring"]),
+          s("cloudwatch-logs", "CloudWatch Logs", "Monitoring", Archive, ["monitoring"]),
+          s("cloudwatch-metrics", "CloudWatch Metrics", "Monitoring", BarChart3, ["monitoring"]),
+          s("cloudwatch-alarms", "CloudWatch Alarms", "Monitoring", Activity, ["monitoring"]),
         ],
       },
       {
@@ -220,6 +280,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("codedeploy", "CodeDeploy", "DevOps", Cloud, ["compute"]),
           s("ecr", "ECR", "DevOps", Archive, ["object-storage"]),
           s("cloudformation", "CloudFormation", "DevOps", Layers, ["compute"]),
+          s("cdk", "CDK", "DevOps", Layers, ["compute"]),
+          s("systems-manager", "Systems Manager", "DevOps", Settings, ["compute"]),
         ],
       },
       {
@@ -233,6 +295,11 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("emr", "EMR", "Analytics", Server, ["compute"]),
           s("redshift-analytics", "Redshift", "Analytics", Database, ["database"]),
           s("quicksight", "QuickSight", "Analytics", BarChart3, ["bi"]),
+          s("kinesis-data-streams", "Kinesis Data Streams", "Analytics", Waves, ["streaming"]),
+          s("kinesis-firehose", "Kinesis Data Firehose", "Analytics", Waves, ["streaming"]),
+          s("glue-crawler", "Glue Crawler", "Analytics", Layers, ["etl", "data-catalog"]),
+          s("glue-etl", "Glue ETL", "Analytics", Layers, ["etl"]),
+          s("redshift-spectrum", "Redshift Spectrum", "Analytics", Database, ["database", "warehouse"]),
         ],
       },
       {
@@ -251,6 +318,13 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("datasync", "DataSync", "Migration", HardDrive, ["network"]),
           s("migrationhub", "Migration Hub", "Migration", Globe, ["network"]),
           s("directconnect", "Direct Connect", "Migration", Network, ["network"]),
+        ],
+      },
+      {
+        name: "CDN & DNS",
+        services: [
+          s("hosted-zone", "Route 53 Hosted Zone", "CDN & DNS", Globe, ["dns"]),
+          s("dns-record", "Route 53 Record", "CDN & DNS", Route, ["dns"]),
         ],
       },
       {
@@ -295,6 +369,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("expressroute", "ExpressRoute", "Networking", Network, ["network"]),
           s("loadbalancer", "Azure Load Balancer", "Networking", Scale, ["load-balancer"]),
           s("trafficmanager", "Traffic Manager", "Networking", Route, ["dns", "load-balancer"]),
+          s("azure-availability-zone", "Availability Zone", "Networking", Globe, ["network", "failover"]),
+          s("azure-nat-gateway", "NAT Gateway", "Networking", Network, ["network"]),
         ],
       },
       {
@@ -305,6 +381,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("files", "Azure Files", "Storage", HardDrive, ["block-storage"]),
           s("archive-tier", "Archive Storage", "Storage", Archive, ["archive"]),
           s("datalake", "Data Lake Storage", "Storage", Database, ["object-storage"]),
+          s("azure-storage-account", "Storage Account", "Storage", Archive, ["object-storage"]),
+          s("azure-blob-object", "Blob Object", "Storage", Archive, ["object-storage"]),
         ],
       },
       {
@@ -315,6 +393,7 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("mysql", "MySQL Flexible", "Database", Database, ["database", "managed-database"]),
           s("cosmos", "Cosmos DB", "Database", Layers, ["database", "nosql", "replication"]),
           s("rediscache", "Azure Cache for Redis", "Database", Gauge, ["cache"]),
+          s("azure-sql-replica", "Azure SQL Read Replica", "Database", Database, ["database", "read-replica", "replication"]),
         ],
       },
       {
@@ -329,6 +408,38 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
         ],
       },
       {
+        name: "API & Application Integration",
+        services: [
+          s("azure-rest-api", "API Management REST API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("azure-http-api", "API Management HTTP API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("azure-websocket-api", "API Management WebSocket API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("azure-api-endpoint", "API Management Endpoint", "API & Application Integration", Route, ["api-gateway"]),
+          s("azure-api-authorizer", "API Management Authorizer", "API & Application Integration", ShieldCheck, ["api-gateway", "auth"]),
+          s("azure-api-policy", "API Management Policy", "API & Application Integration", FileKey, ["api-gateway"]),
+          s("azure-api-cache", "API Management Cache", "API & Application Integration", Gauge, ["api-gateway", "cache"]),
+        ],
+      },
+      {
+        name: "Containers & Kubernetes",
+        services: [
+          s("azure-kubernetes-cluster", "Kubernetes Cluster", "Containers & Kubernetes", Boxes, ["container"]),
+          s("azure-kubernetes-pod", "Kubernetes Pod", "Containers & Kubernetes", Container, ["container"]),
+          s("azure-kubernetes-service", "Kubernetes Service", "Containers & Kubernetes", Network, ["container", "network"]),
+          s("azure-kubernetes-ingress", "Kubernetes Ingress", "Containers & Kubernetes", Route, ["container", "reverse-proxy"]),
+          s("azure-replicaset", "Kubernetes ReplicaSet", "Containers & Kubernetes", Boxes, ["container", "autoscaling"]),
+          s("azure-cluster-autoscaler", "Cluster Autoscaler", "Containers & Kubernetes", Scale, ["container", "autoscaling"]),
+          s("azure-kubernetes-node", "Kubernetes Node", "Containers & Kubernetes", Server, ["container", "compute"]),
+        ],
+      },
+      {
+        name: "Caching",
+        services: [
+          s("azure-redis", "Azure Cache for Redis", "Caching", Gauge, ["cache"]),
+          s("azure-cache-api", "API Management Cache", "Caching", Gauge, ["cache", "api-gateway"]),
+          s("azure-frontdoor-cache", "Azure Front Door Cache", "Caching", Globe, ["cache", "cdn"]),
+        ],
+      },
+      {
         name: "Security",
         services: [
           s("entra", "Entra ID", "Security", ShieldCheck, ["auth"]),
@@ -337,6 +448,9 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("nsg", "Network Security Group", "Security", Lock, ["private-network"]),
           s("defender", "Defender for Cloud", "Security", Shield, ["monitoring"]),
           s("ddos", "DDoS Protection", "Security", Shield, ["waf"]),
+          s("managed-identity", "Managed Identity", "Security", Users, ["auth"]),
+          s("rbac-role", "Azure RBAC Role", "Security", ShieldCheck, ["auth"]),
+          s("private-endpoint", "Private Endpoint", "Security", Network, ["private-network"]),
         ],
       },
       {
@@ -345,6 +459,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("monitor", "Azure Monitor", "Monitoring", BarChart3, ["monitoring"]),
           s("appinsights", "Application Insights", "Monitoring", Activity, ["tracing"]),
           s("loganalytics", "Log Analytics", "Monitoring", Activity, ["monitoring"]),
+          s("azure-monitor-metrics", "Monitor Metrics", "Monitoring", BarChart3, ["monitoring"]),
+          s("azure-monitor-alerts", "Monitor Alerts", "Monitoring", Activity, ["monitoring"]),
         ],
       },
       {
@@ -432,6 +548,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("natgw", "Cloud NAT", "Networking", Network, ["network"]),
           s("cloudrouter", "Cloud Router", "Networking", Route, ["network"]),
           s("cloudinterconnect", "Cloud Interconnect", "Networking", Network, ["network"]),
+          s("gcp-availability-zone", "Availability Zone", "Networking", Globe, ["network", "failover"]),
+          s("gcp-load-balancer", "Application Load Balancer", "Networking", Scale, ["load-balancer"]),
         ],
       },
       {
@@ -441,6 +559,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("pd", "Persistent Disk", "Storage", HardDrive, ["block-storage"]),
           s("filestore", "Filestore", "Storage", HardDrive, ["block-storage"]),
           s("coldline", "Coldline Archive", "Storage", Archive, ["archive"]),
+          s("gcs-bucket", "Cloud Storage Bucket", "Storage", Archive, ["object-storage"]),
+          s("gcs-object", "Cloud Storage Object", "Storage", Archive, ["object-storage"]),
         ],
       },
       {
@@ -466,6 +586,38 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
         ],
       },
       {
+        name: "API & Application Integration",
+        services: [
+          s("gcp-rest-api", "API Gateway REST API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("gcp-http-api", "API Gateway HTTP API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("gcp-websocket-api", "API Gateway WebSocket API", "API & Application Integration", Workflow, ["api-gateway"]),
+          s("gcp-api-endpoint", "API Gateway Endpoint", "API & Application Integration", Route, ["api-gateway"]),
+          s("gcp-api-authentication", "API Gateway Authentication", "API & Application Integration", ShieldCheck, ["api-gateway", "auth"]),
+          s("gcp-api-authorizer", "API Gateway Authorizer", "API & Application Integration", ShieldCheck, ["api-gateway", "auth"]),
+          s("gcp-api-cache", "API Gateway Cache", "API & Application Integration", Gauge, ["api-gateway", "cache"]),
+        ],
+      },
+      {
+        name: "Containers & Kubernetes",
+        services: [
+          s("gcp-kubernetes-cluster", "Kubernetes Cluster", "Containers & Kubernetes", Boxes, ["container"]),
+          s("gcp-kubernetes-pod", "Kubernetes Pod", "Containers & Kubernetes", Container, ["container"]),
+          s("gcp-kubernetes-service", "Kubernetes Service", "Containers & Kubernetes", Network, ["container", "network"]),
+          s("gcp-kubernetes-ingress", "Kubernetes Ingress", "Containers & Kubernetes", Route, ["container", "reverse-proxy"]),
+          s("gcp-replicaset", "Kubernetes ReplicaSet", "Containers & Kubernetes", Boxes, ["container", "autoscaling"]),
+          s("gcp-cluster-autoscaler", "Cluster Autoscaler", "Containers & Kubernetes", Scale, ["container", "autoscaling"]),
+          s("gcp-kubernetes-node", "Kubernetes Node", "Containers & Kubernetes", Server, ["container", "compute"]),
+        ],
+      },
+      {
+        name: "Caching",
+        services: [
+          s("gcp-redis", "Memorystore for Redis", "Caching", Gauge, ["cache"]),
+          s("gcp-memcached", "Memorystore for Memcached", "Caching", Gauge, ["cache"]),
+          s("gcp-cdn-cache", "Cloud CDN Cache", "Caching", Globe, ["cache", "cdn"]),
+        ],
+      },
+      {
         name: "Security",
         services: [
           s("iam", "Cloud IAM", "Security", ShieldCheck, ["auth"]),
@@ -476,6 +628,10 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("firewall", "VPC Firewall", "Security", Lock, ["private-network"]),
           s("iap", "Identity-Aware Proxy", "Security", ShieldCheck, ["auth"]),
           s("scc", "Security Command Center", "Security", Shield, ["monitoring"]),
+          s("service-account", "Service Account", "Security", Users, ["auth"]),
+          s("iam-role", "IAM Role", "Security", ShieldCheck, ["auth"]),
+          s("iam-policy", "IAM Policy", "Security", FileKey, ["auth"]),
+          s("private-service-connect", "Private Service Connect", "Security", Network, ["private-network"]),
         ],
       },
       {
@@ -485,6 +641,8 @@ export const CLOUDS: Record<CloudId, CloudDef> = {
           s("trace", "Cloud Trace", "Monitoring", Activity, ["tracing"]),
           s("logging", "Cloud Logging", "Monitoring", Activity, ["monitoring"]),
           s("errorreporting", "Error Reporting", "Monitoring", Activity, ["monitoring"]),
+          s("alerting", "Cloud Monitoring Alerting", "Monitoring", Activity, ["monitoring"]),
+          s("metrics", "Cloud Monitoring Metrics", "Monitoring", BarChart3, ["monitoring"]),
         ],
       },
       {
@@ -560,13 +718,17 @@ export const BOUNDARY_KINDS = [
   { id: "az", label: "Availability Zone", color: "var(--muted-foreground)", icon: Cloud },
   { id: "public-subnet", label: "Public Subnet", color: "var(--warning)", icon: Split },
   { id: "private-subnet", label: "Private Subnet", color: "var(--success)", icon: Split },
-  { id: "k8s", label: "Kubernetes Cluster", color: "var(--info)", icon: Boxes },
-  { id: "service-group", label: "Service Group", color: "var(--primary)", icon: Layers },
-  { id: "database-layer", label: "Database Layer", color: "var(--success)", icon: Database },
-  { id: "security-boundary", label: "Security Boundary", color: "var(--destructive)", icon: Shield },
+  { id: "security-zone", label: "Security Zone", color: "var(--destructive)", icon: Shield },
+  { id: "service-boundary", label: "Service Boundary", color: "var(--primary)", icon: Layers },
 ] as const;
 
-export type BoundaryKind = (typeof BOUNDARY_KINDS)[number]["id"];
+/** Legacy kinds remain supported when loading older diagrams but are hidden from the library. */
+export type BoundaryKind =
+  | (typeof BOUNDARY_KINDS)[number]["id"]
+  | "k8s"
+  | "service-group"
+  | "database-layer"
+  | "security-boundary";
 
 export const ARCHITECTURE_PATTERNS = [
   "Monolithic",

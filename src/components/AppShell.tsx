@@ -37,12 +37,28 @@ const NAV = [
   { to: "/profile", label: "Profile", icon: CircleUserRound },
 ] as const;
 
+const CANVAS_THEME_STORAGE_KEY = "archguard-canvas-theme";
+const CANVAS_THEME_EVENT = "archguard:canvas-theme-change";
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authOpen, setAuthOpen] = useState(false);
+
+  const toggleAppTheme = () => {
+    const nextCanvasTheme = theme === "dark" ? "light" : "dark";
+    toggleTheme();
+    try {
+      window.localStorage.setItem(CANVAS_THEME_STORAGE_KEY, nextCanvasTheme);
+      window.dispatchEvent(
+        new CustomEvent(CANVAS_THEME_EVENT, { detail: nextCanvasTheme }),
+      );
+    } catch {
+      // Ignore storage/event failures in restricted environments.
+    }
+  };
 
   const openAuth = (mode: "login" | "signup") => {
     setAuthMode(mode);
@@ -51,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      <aside className="hidden w-[236px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <aside className="archguard-sidebar hidden w-[236px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="flex items-center gap-2.5 px-4 py-4">
           <div className="flex shrink-0 items-center justify-center">
             <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-9 w-auto object-contain" />
@@ -70,10 +86,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+                  "archguard-sidebar-link flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
-                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    ? "archguard-sidebar-link--active bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
+                    : "text-sidebar-foreground/75",
                 )}
               >
                 <item.icon className={cn("size-4", active && "text-primary")} />
@@ -86,10 +102,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => openAuth("login")}
             aria-current={authOpen && authMode === "login" ? "page" : undefined}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+              "archguard-sidebar-link flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
               authOpen && authMode === "login"
-                ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
-                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                ? "archguard-sidebar-link--active bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
+                : "text-sidebar-foreground/75",
             )}
           >
             <LogIn className={cn("size-4", authOpen && authMode === "login" && "text-primary")} />
@@ -100,10 +116,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => openAuth("signup")}
             aria-current={authOpen && authMode === "signup" ? "page" : undefined}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+              "archguard-sidebar-link flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
               authOpen && authMode === "signup"
-                ? "bg-primary/12 text-primary shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
-                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                ? "archguard-sidebar-link--active bg-primary/12 text-primary shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
+                : "text-sidebar-foreground/75",
             )}
           >
             <UserPlus className={cn("size-4", authOpen && authMode === "signup" && "text-primary")} />
@@ -113,9 +129,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="px-2 pb-2">
           <button
-            onClick={toggleTheme}
+            onClick={toggleAppTheme}
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            className="archguard-sidebar-link flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-sidebar-foreground/75 transition-colors"
           >
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
             {theme === "dark" ? "Light Mode" : "Dark Mode"}
@@ -123,9 +139,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="border-t border-sidebar-border p-3">
-          <div className="rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              <span className="font-medium text-foreground">Rule Engine decides.</span> AI explains.
+          <div className="archguard-sidebar-note rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
+            <p className="text-[11px] leading-relaxed text-sidebar-foreground/80">
+              <span className="font-medium text-sidebar-foreground/95">Rule Engine decides.</span> AI explains.
               Scores are deterministic.
             </p>
           </div>

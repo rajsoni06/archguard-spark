@@ -129,13 +129,13 @@ function physicalBoundaryPlacement(
 ): BoundaryPlacement {
   const category = categoryKey(service);
 
-  if (kind === "service-group") {
+  if (kind === "service-group" || kind === "service-boundary") {
     if (isGlobalEdge(service) || isIdentity(service) || isDevOps(service)) return "Allowed";
     if (category === "compute" || category === "integration" || hasAnyCap(service, ["compute", "container", "serverless", "queue", "pubsub", "streaming"])) return "Recommended";
     return "External";
   }
 
-  if (kind === "security-boundary") {
+  if (kind === "security-boundary" || kind === "security-zone") {
     if (isSecurityControl(service)) {
       return "Recommended";
     }
@@ -219,9 +219,11 @@ export function isBoundaryMember(kind: BoundaryKind, service: PlacementService, 
 
 export function canNestBoundary(parent: BoundaryKind, child: BoundaryKind): boolean {
   const allowed: Record<BoundaryKind, BoundaryKind[]> = {
-    region: ["vpc", "az", "security-boundary", "public-subnet", "private-subnet", "k8s", "service-group", "database-layer"],
-    vpc: ["az", "security-boundary", "public-subnet", "private-subnet", "k8s", "service-group", "database-layer"],
-    az: ["security-boundary", "public-subnet", "private-subnet", "k8s", "service-group", "database-layer"],
+    region: ["vpc", "az", "security-zone", "public-subnet", "private-subnet", "service-boundary", "security-boundary", "k8s", "service-group", "database-layer"],
+    vpc: ["az", "security-zone", "public-subnet", "private-subnet", "service-boundary", "security-boundary", "k8s", "service-group", "database-layer"],
+    az: ["security-zone", "public-subnet", "private-subnet", "service-boundary", "security-boundary", "k8s", "service-group", "database-layer"],
+    "security-zone": [],
+    "service-boundary": [],
     "security-boundary": [],
     "public-subnet": ["k8s", "service-group"],
     "private-subnet": ["k8s", "service-group", "database-layer"],
@@ -241,10 +243,14 @@ export function getBoundaryLabel(kind: BoundaryKind, cloud?: CloudId): string {
 
   return kind === "security-boundary"
     ? "Security Boundary"
+    : kind === "security-zone"
+      ? "Security Zone"
     : kind === "database-layer"
       ? "Database Layer"
       : kind === "service-group"
         ? "Service Group"
+        : kind === "service-boundary"
+          ? "Service Boundary"
         : kind === "public-subnet"
           ? "Public Subnet"
           : kind === "private-subnet"

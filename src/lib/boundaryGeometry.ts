@@ -44,11 +44,13 @@ const BOUNDARY_DEPTH: Record<string, number> = {
   vpc: 1,
   az: 2,
   "security-boundary": 3,
+  "security-zone": 3,
   "public-subnet": 4,
   "private-subnet": 4,
   "database-layer": 4,
   k8s: 5,
   "service-group": 5,
+  "service-boundary": 5,
 };
 
 export function boundaryDepth(kind?: string): number {
@@ -149,12 +151,14 @@ function boundaryPadding(kind?: BoundaryKind) {
     case "az":
       return { top: BOUNDARY_TOP_GAP, right: BOUNDARY_SIDE_GAP, bottom: BOUNDARY_SIDE_GAP, left: BOUNDARY_SIDE_GAP };
     case "security-boundary":
+    case "security-zone":
       return { top: BOUNDARY_TOP_GAP - 2, right: BOUNDARY_SIDE_GAP, bottom: BOUNDARY_SIDE_GAP, left: BOUNDARY_SIDE_GAP };
     case "public-subnet":
     case "private-subnet":
     case "database-layer":
     case "k8s":
     case "service-group":
+    case "service-boundary":
     default:
       return { top: BOUNDARY_TOP_GAP - 4, right: BOUNDARY_SIDE_GAP - 2, bottom: BOUNDARY_SIDE_GAP - 2, left: BOUNDARY_SIDE_GAP - 2 };
   }
