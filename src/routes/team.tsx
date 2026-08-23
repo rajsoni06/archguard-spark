@@ -22,7 +22,7 @@ function Page() {
   return (
     <AppShell>
       <PageHeader title={meta.heading} subtitle={meta.subtitle} />
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="team-page flex-1 overflow-y-auto p-6">
         <PlaceholderPanel meta={meta} />
       </div>
     </AppShell>

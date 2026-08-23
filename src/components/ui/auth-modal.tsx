@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "./dialog";
-import { X, Globe, Lock, Mail, User } from "lucide-react";
+import { X, Globe, Lock, Mail, User, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AuthDialog({
@@ -31,6 +31,8 @@ export default function AuthDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   React.useEffect(() => setView(mode), [mode]);
 
@@ -41,6 +43,8 @@ export default function AuthDialog({
     setEmail("");
     setPassword("");
     setConfirm("");
+    setShowPassword(false);
+    setShowConfirm(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -74,8 +78,16 @@ export default function AuthDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-surface p-6 sm:p-8 shadow-2xl border-border rounded-2xl">
-        <DialogHeader className="text-center sm:text-left">
+      <DialogContent className="auth-dialog max-w-md bg-surface p-6 shadow-2xl border-border rounded-2xl">
+        <DialogHeader className="auth-dialog-header text-center sm:text-left">
+          <div className="mb-3 flex items-center justify-center gap-2.5 sm:justify-start">
+            <img
+              src="/ArchGuard_Logo.png"
+              alt="ArchGuard AI"
+              className="size-9 object-contain"
+            />
+            <span className="text-sm font-semibold tracking-tight text-foreground">ArchGuard AI</span>
+          </div>
           <DialogTitle className="text-xl font-semibold tracking-tight text-foreground">
             {view === "login" ? "Sign in to ArchGuard AI" : "Create your account"}
           </DialogTitle>
@@ -86,7 +98,7 @@ export default function AuthDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
+        <form onSubmit={handleSubmit} className="auth-form mt-5 grid gap-3">
           {view === "signup" && (
             <label className="flex items-center gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5 shadow-sm transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50">
               <User className="size-4.5 text-muted-foreground shrink-0" />
@@ -112,25 +124,41 @@ export default function AuthDialog({
 
           <label className="flex items-center gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5 shadow-sm transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50">
             <Lock className="size-4.5 text-muted-foreground shrink-0" />
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              type="password"
-              className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                type={showPassword ? "text" : "password"}
+                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
           </label>
 
           {view === "signup" && (
             <label className="flex items-center gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5 shadow-sm transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50">
               <Lock className="size-4.5 text-muted-foreground shrink-0" />
-              <input
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirm password"
-                type="password"
-                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
+                <input
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="Confirm password"
+                  type={showConfirm ? "text" : "password"}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm((visible) => !visible)}
+                  aria-label={showConfirm ? "Hide confirmed password" : "Show confirmed password"}
+                  className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
             </label>
           )}
 

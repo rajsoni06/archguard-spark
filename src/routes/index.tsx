@@ -101,9 +101,9 @@ function Landing() {
         <span className="home-orb home-orb-three" />
       </div>
 
-      <header className="home-reveal is-visible relative z-30 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
+      <header className="home-header home-reveal is-visible relative z-30 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-12 w-auto object-contain" />
+          <img src="/ArchGuard_Logo.png" alt="ArchGuard Logo" className="h-9 w-auto object-contain" />
           <span className="truncate text-base font-semibold tracking-tight">ArchGuard AI</span>
         </div>
         <nav className="flex shrink-0 items-center gap-2 text-sm">
@@ -158,7 +158,7 @@ function Landing() {
       </header>
 
       <main className="relative z-10">
-        <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-4 lg:-mt-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-0">
+        <section className="home-hero mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-4 lg:-mt-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-0">
           <div>
             <span className="home-reveal is-visible home-reveal-delay-1 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground shadow-sm backdrop-blur-xl">
               <span className="home-live-dot" />
@@ -204,19 +204,11 @@ function Landing() {
             </div>
             <dl className="home-reveal is-visible home-reveal-delay-5 mt-10 grid max-w-lg grid-cols-3 gap-2 sm:gap-4">
               {[
-                ["6", "Score categories"],
-                ["3", "Cloud providers"],
-                ["100%", "Deterministic scoring"],
-              ].map(([v, k]) => (
-                <div
-                  key={k}
-                  className="home-stat rounded-xl border border-border bg-card/50 p-3 backdrop-blur"
-                >
-                  <dt className="text-lg font-semibold tracking-tight">{v}</dt>
-                  <dd className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {k}
-                  </dd>
-                </div>
+                [6, "Score categories", ""],
+                [3, "Cloud providers", ""],
+                [100, "Deterministic scoring", "%"],
+              ].map(([value, label, suffix]) => (
+                <AnimatedStat key={label} value={value as number} label={label as string} suffix={suffix as string} />
               ))}
             </dl>
           </div>
@@ -224,6 +216,24 @@ function Landing() {
           <div className="home-reveal is-visible">
             <FlowVisual />
           </div>
+        </section>
+
+        <section className="home-proof-strip mx-auto grid max-w-6xl gap-2 px-5 pb-16 sm:grid-cols-3">
+          {([
+            [CheckCircle2, "Deterministic by design", "The same architecture graph produces the same score."],
+            [Globe, "Multi-cloud ready", "Design for AWS, Azure, and Google Cloud in one workflow."],
+            [Bot, "AI-assisted clarity", "Turn rule findings into practical next steps your team can act on."],
+          ] as const).map(([Icon, title, body]) => (
+            <div key={title as string} className="home-proof-item flex items-start gap-2.5 rounded-xl border border-border/80 bg-card/55 px-3 py-2.5 backdrop-blur">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="size-3.5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold tracking-tight">{title as string}</span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-muted-foreground">{body as string}</span>
+              </span>
+            </div>
+          ))}
         </section>
 
         <section className="mx-auto max-w-6xl px-5 pb-20">
@@ -343,6 +353,37 @@ function Reveal({ children, className = "" }: { children: React.ReactNode; class
   return <div ref={ref} className={`home-reveal ${visible ? "is-visible" : ""} ${className}`}>{children}</div>;
 }
 
+function AnimatedStat({ value, label, suffix }: { value: number; label: string; suffix: string }) {
+  const [count, setCount] = React.useState(1);
+
+  React.useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setCount(value);
+      return;
+    }
+
+    const start = performance.now();
+    const duration = 900;
+    let frame = 0;
+    const animate = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(1 + (value - 1) * eased));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return (
+    <div className="home-stat rounded-xl border border-border bg-card/50 p-3 backdrop-blur">
+      <dt className="text-lg font-semibold tracking-tight">{count}{suffix}</dt>
+      <dd className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dd>
+    </div>
+  );
+}
+
 function FlowVisual() {
   return (
     <div className="home-flow-visual relative mx-auto w-full max-w-[310px] pt-6 lg:max-w-[350px] lg:pt-10">
@@ -354,8 +395,8 @@ function FlowVisual() {
             "linear-gradient(140deg, color-mix(in oklab, var(--primary) 30%, transparent), transparent 60%)",
         }}
       />
-      <div className="home-flow-card relative rounded-3xl border border-border bg-card/60 p-4 backdrop-blur-xl sm:p-5">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="home-flow-card relative z-[2] rounded-3xl border border-border bg-card p-3.5 shadow-2xl backdrop-blur-xl sm:p-4">
+        <div className="mb-3 flex items-center justify-between">
           <div>
             <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <Activity className="size-3 text-primary" /> Reference request flow
@@ -364,13 +405,21 @@ function FlowVisual() {
           </div>
           <span className="home-trace-status"><span className="home-live-dot" /> LIVE TRACE</span>
         </div>
-        <ol className="home-flow-list relative space-y-1.5">
+        <ol className="home-flow-list relative space-y-1">
           <span className="home-flow-rail" aria-hidden />
           {FLOW.map((step, i) => (
-            <li key={step.label}>
+            <li key={step.label} className="home-flow-item">
+              <span
+                className="home-flow-incoming"
+                aria-hidden="true"
+                style={{ animationDelay: `${i * 0.9}s` }}
+              >
+                <step.icon className="size-3 shrink-0" />
+                <span className="truncate">{step.label}</span>
+              </span>
               <div
-                className="home-flow-step archflow-pulse group relative z-[1] flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5"
-                style={{ animationDelay: `${i * 0.28}s` }}
+                className="home-flow-step archflow-pulse group relative z-[1] flex items-center gap-2 rounded-lg border border-border/70 bg-background/60 px-2 py-1.5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5"
+                style={{ animationDelay: `${i * 0.28}s`, "--flow-delay": `${i * 0.9}s` } as React.CSSProperties}
               >
                 <span className="home-flow-icon grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary transition-transform group-hover:scale-110">
                   <step.icon className="size-3.5" />
@@ -384,7 +433,7 @@ function FlowVisual() {
             </li>
           ))}
         </ol>
-        <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3 text-[10px] text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2.5 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3 text-emerald-500" /> Flow validated</span>
           <span className="flex items-center gap-2"><span className="font-medium text-primary">8 components</span><span className="text-muted-foreground/50">·</span><span>42ms avg</span></span>
         </div>

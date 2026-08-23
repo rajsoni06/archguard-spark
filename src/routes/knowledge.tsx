@@ -68,6 +68,7 @@ function KnowledgePage() {
 
   return (
     <AppShell>
+      <div className="knowledge-hub-page flex min-h-0 flex-1 flex-col">
       <PageHeader title="Knowledge Hub" subtitle="Design → Review → Learn → Improve">
         <div className="relative ml-auto w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -91,6 +92,7 @@ function KnowledgePage() {
           onArticle={(slug) => navigate({ search: { article: slug } })}
         />
       )}
+      </div>
     </AppShell>
   );
 }
@@ -109,28 +111,28 @@ function HubView({
   onArticle: (slug: string) => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-      <aside className="shrink-0 border-b border-border bg-card/50 p-3 lg:w-64 lg:border-b-0 lg:border-r lg:p-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+      <aside className="shrink-0 border-b border-border bg-card/50 p-3 md:w-56 md:border-b-0 md:border-r md:p-3 lg:w-64 lg:p-4">
         <div className="mb-3 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           <Layers3 className="size-3.5 text-primary" /> Learning paths
         </div>
-        <nav className="flex gap-1 overflow-x-auto lg:grid lg:gap-1">
+        <nav className="flex gap-1 overflow-x-auto md:grid md:gap-1">
           {categories.map((category) => (
             <button
               key={category.id}
               type="button"
               onClick={() => onCategory(category.id)}
               className={cn(
-                "group flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors lg:w-full",
+                "group flex min-w-0 shrink-0 items-center justify-between rounded-xl px-2.5 py-2 text-left text-[12px] transition-colors md:w-full lg:px-3 lg:py-2.5 lg:text-[13px]",
                 activeCategory === category.id
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
-              <span>{category.name}</span>
+              <span className="min-w-0 truncate">{category.name}</span>
               <span
                 className={cn(
-                  "ml-3 rounded-full px-1.5 py-0.5 text-[10px]",
+                  "ml-3 shrink-0 rounded-full px-1.5 py-0.5 text-[10px]",
                   activeCategory === category.id
                     ? "bg-primary-foreground/20 text-primary-foreground"
                     : "bg-muted text-muted-foreground",
@@ -159,25 +161,25 @@ function CategoryView({
   const [featured, ...articles] = category.articles;
   const guide = LEARNING_PATH.find((item) => item.id === category.id);
   return (
-    <div className="mx-auto max-w-6xl">
-      <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-4 sm:p-5">
+    <div className="knowledge-category mx-auto max-w-6xl">
+      <section className="knowledge-path-hero relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-4 sm:p-5">
         <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-primary">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
             <Sparkles className="size-3.5" /> Knowledge path
           </div>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+          <h2 className="mt-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
             {category.name}
           </h2>
-          <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-[13px]">
             {category.description}
           </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1">
             {category.topics.map((topic) => (
               <Badge
                 key={topic}
                 variant="outline"
-                className="border-border bg-background/60 px-2.5 py-1 text-[11px] text-muted-foreground"
+                className="border-border/80 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
               >
                 {topic}
               </Badge>
@@ -190,16 +192,16 @@ function CategoryView({
         <button
           type="button"
           onClick={() => onArticle(featured.slug)}
-          className="group mt-4 grid w-full gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md sm:grid-cols-[1fr_auto] sm:p-5"
+          className="knowledge-featured-card group mt-3 grid w-full gap-3 rounded-2xl border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md sm:grid-cols-[1fr_auto] sm:p-4"
         >
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
               <BookOpenText className="size-4" /> Start here
             </div>
-            <h3 className="mt-2 text-lg font-semibold tracking-tight group-hover:text-primary">
+            <h3 className="mt-1.5 text-base font-semibold tracking-tight group-hover:text-primary sm:text-lg">
               {featured.title}
             </h3>
-            <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-[13px]">
               {featured.summary}
             </p>
             <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -211,18 +213,18 @@ function CategoryView({
           </div>
         </button>
       ) : null}
-      <div className="mt-5 flex items-center justify-between gap-3">
+      <div className="mt-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Continue learning
           </p>
-          <h3 className="mt-1 text-lg font-semibold tracking-tight">
+          <h3 className="mt-0.5 text-base font-semibold tracking-tight">
             More patterns and practical guidance
           </h3>
         </div>
         <span className="text-xs text-muted-foreground">{category.articles.length} articles</span>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="knowledge-article-grid mt-2.5 grid gap-2.5 md:grid-cols-2">
         {articles.map((item, index) => (
           <ArticleCard
             key={item.slug}
@@ -238,37 +240,47 @@ function CategoryView({
 
 function LearningGuide({ guide, showOrder }: { guide: LearningPathGuide; showOrder: boolean }) {
   return (
-    <section className="mt-4 grid gap-3 lg:grid-cols-[0.85fr_1.15fr]">
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+    <section className="knowledge-guide mt-3 grid grid-cols-1 gap-2.5">
+      <div className="rounded-2xl border border-border bg-card p-3.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
           Definition
         </div>
-        <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{guide.definition}</p>
-        {showOrder ? (
-          <div className="mt-4 border-t border-border pt-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{guide.definition}</p>
+        {false && showOrder ? (
+          <div className="mt-3 border-t border-border pt-2.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Recommended interview order
             </div>
-            <p className="mt-2 text-xs leading-6 text-muted-foreground">
+            <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
               {RECOMMENDED_LEARNING_ORDER.join(" → ")}
             </p>
           </div>
         ) : null}
       </div>
-      <div className="rounded-2xl border border-border bg-card p-4">
+      {showOrder ? (
+        <div className="rounded-2xl border border-border bg-card p-3.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+            Recommended interview order
+          </div>
+          <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
+            {RECOMMENDED_LEARNING_ORDER.join(" → ")}
+          </p>
+        </div>
+      ) : null}
+      <div className="rounded-2xl border border-border bg-card p-3.5">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
             Core contents
           </div>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground">
             {guide.contents.length} concepts
           </span>
         </div>
-        <div className="mt-3 flex max-h-40 flex-wrap content-start gap-1.5 overflow-y-auto pr-1">
+        <div className="knowledge-contents mt-2 flex max-h-28 flex-wrap content-start gap-1 overflow-y-auto pr-1">
           {guide.contents.map((content) => (
             <span
               key={content}
-              className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground"
+              className="rounded-md border border-border/80 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground"
             >
               {content}
             </span>
@@ -292,7 +304,7 @@ function ArticleCard({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+      className="group rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-primary">
@@ -300,13 +312,13 @@ function ArticleCard({
         </span>
         <span className="text-[11px] font-medium text-muted-foreground">0{index + 2}</span>
       </div>
-      <h4 className="mt-4 text-sm font-semibold leading-snug group-hover:text-primary">
+      <h4 className="mt-3 text-sm font-semibold leading-snug group-hover:text-primary">
         {article.title}
       </h4>
       <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
         {article.summary}
       </p>
-      <div className="mt-4 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <Clock className="size-3.5" /> {article.readMinutes} min read
         </span>

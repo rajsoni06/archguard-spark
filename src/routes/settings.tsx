@@ -35,7 +35,7 @@ function Page() {
   return (
     <AppShell>
       <PageHeader title={meta.heading} subtitle={meta.subtitle} />
-      <div className="flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6">
+      <div className="settings-page flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6">
         <div className="mx-auto max-w-5xl space-y-5">
           <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Control center</p><h1 className="mt-1 text-xl font-semibold tracking-tight">Defaults, rule thresholds and export preferences</h1><p className="mt-1 text-sm text-muted-foreground">Tune how new projects are reviewed and shared on this device.</p></div><div className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground sm:flex"><Settings2 className="size-3.5 text-primary" /> Saved locally</div></div>
           <Appearance />
@@ -57,7 +57,7 @@ function Page() {
 function Appearance() {
   const { theme, setTheme } = useTheme();
   const options = [{ id: "light" as const, label: "Light Mode", icon: Sun, description: "Bright and focused" }, { id: "dark" as const, label: "Dark Mode", icon: Moon, description: "Low-light friendly" }];
-  return <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"><SectionHeading icon={Sparkles} title="Appearance" description="Choose how ArchGuard AI looks. Your choice is saved on this device." /><div className="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">{options.map((option) => <button key={option.id} type="button" onClick={() => setTheme(option.id)} className={cn("flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors", theme === option.id ? "border-primary bg-primary/10" : "border-border hover:bg-accent")}><option.icon className={cn("size-4", theme === option.id ? "text-primary" : "text-muted-foreground")} /><span><span className="block text-sm font-medium">{option.label}</span><span className="block text-xs text-muted-foreground">{option.description}</span></span></button>)}</div></section>;
+  return <section className="appearance-card rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><SectionHeading icon={Sparkles} title="Appearance" description="Choose how ArchGuard AI looks." /><span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Saved locally</span></div><div className="mt-3 grid max-w-xl grid-cols-2 gap-2">{options.map((option) => { const selected = theme === option.id; return <button key={option.id} type="button" onClick={() => setTheme(option.id)} className={cn("flex min-w-0 items-center gap-2 rounded-xl border p-2.5 text-left transition-all hover:-translate-y-0.5", selected ? "border-primary/60 bg-primary/10 shadow-sm" : "border-border bg-background/50 hover:border-primary/30 hover:bg-accent/60")}><span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}><option.icon className="size-3.5" /></span><span className="min-w-0"><span className="block truncate text-xs font-semibold">{option.label}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{option.description}</span></span></button>; })}</div></section>;
 }
 
 function AccountCard() {

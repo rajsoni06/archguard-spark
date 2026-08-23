@@ -292,14 +292,14 @@ export function FloatingAiReviewer({ result, ctx }: Props) {
           type="button"
           variant="ghost"
           onClick={() => (open ? hidePopup() : showPopup())}
-          className="pointer-events-auto h-auto min-h-10 rounded-none bg-transparent p-0 shadow-none transition-transform hover:bg-transparent hover:-translate-y-0.5 sm:min-h-12"
+          className="pointer-events-auto h-auto min-h-8 rounded-none bg-transparent p-0 shadow-none transition-transform hover:bg-transparent hover:-translate-y-0.5 sm:min-h-10"
           aria-expanded={open}
           aria-label={open ? "Close Ask AI" : "Ask AI"}
         >
           <img
             src="/Ask_Ai_main_logo.png"
             alt="Ask AI"
-            className="h-10 w-auto max-w-[calc(100vw-2rem)] object-contain sm:h-12"
+            className="h-8 w-auto max-w-[calc(100vw-2rem)] object-contain sm:h-10"
           />
         </Button>
       </div>

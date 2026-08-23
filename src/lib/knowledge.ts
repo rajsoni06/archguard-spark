@@ -22,7 +22,7 @@ const a = (
   sections: { heading: string; body: string[] }[],
 ): Article => ({ slug, title, summary, readMinutes, sections });
 
-export const KNOWLEDGE: KnowledgeCategory[] = [
+const KNOWLEDGE_BASE: KnowledgeCategory[] = [
   {
     id: "patterns",
     name: "System Design Patterns",
@@ -1160,10 +1160,6 @@ export const KNOWLEDGE: KnowledgeCategory[] = [
   },
 ];
 
-export const ALL_ARTICLES: Article[] = KNOWLEDGE.flatMap((c) => c.articles);
-
-export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);
-
 export interface LearningPathGuide {
   id: string;
   definition: string;
@@ -1242,5 +1238,159 @@ export const LEARNING_PATH: LearningPathGuide[] = [
     contents: ["RPS Estimation", "Storage Estimation", "Bandwidth", "Database Sizing", "Back-of-Envelope Calculations", "Peak Traffic", "Read/Write Ratios", "Latency Budgets", "Growth Modeling", "Capacity Buffers"],
   },
 ];
+
+const KNOWLEDGE_EXPANSIONS: Record<string, { topics: string[]; articles: Article[] }> = {
+  patterns: {
+    topics: ["API Design", "Strangler Fig", "Circuit Breakers"],
+    articles: [
+      a("architecture-boundaries", "Boundaries, Coupling & Cohesion", "How to choose boundaries that keep change local and dependencies understandable.", 6, [
+        { heading: "Start with ownership", body: ["A good boundary groups behavior and data that change together, then gives one team clear ownership.", "Avoid splitting around technical layers when the result forces every feature to cross every service."] },
+        { heading: "Measure coupling", body: ["Look for shared databases, synchronous call chains, release coordination, and contracts that change together.", "Prefer explicit events or stable interfaces when a dependency must cross a boundary."] },
+        { heading: "Keep an escape hatch", body: ["Boundaries should be easy to test and observable in production. A modular monolith can preserve the same boundaries before distributed deployment is justified."] },
+      ]),
+    ],
+  },
+  scalability: {
+    topics: ["Horizontal Scaling", "Rate Limiting", "Hotspots"],
+    articles: [
+      a("scaling-strategies", "A Practical Scaling Strategy", "Scale the bottleneck first using replication, partitioning, caching, and asynchronous work.", 6, [
+        { heading: "Find the bottleneck", body: ["Measure CPU, memory, connection pools, storage I/O, queue depth, and tail latency before adding capacity."] },
+        { heading: "Scale out safely", body: ["Stateless services can scale horizontally behind a load balancer. Move session state and durable work to shared, replicated systems.", "Design idempotent writes before retries and autoscaling increase duplicate work."] },
+        { heading: "Protect the system", body: ["Use quotas, backpressure, admission control, and load shedding so overload degrades predictably instead of cascading."] },
+      ]),
+    ],
+  },
+  reliability: {
+    topics: ["Fault Tolerance", "Disaster Recovery", "Error Budgets"],
+    articles: [
+      a("reliability-engineering", "Designing for Failure", "A reliability checklist for dependencies, recovery, and graceful degradation.", 6, [
+        { heading: "Assume dependency failure", body: ["Every network call needs a timeout, bounded retry policy, fallback behavior, and a clear owner."] },
+        { heading: "Recover deliberately", body: ["Define RPO and RTO, automate backups, and rehearse restoration in an isolated environment."] },
+        { heading: "Use error budgets", body: ["An error budget turns reliability into an engineering trade-off: spend it on delivery speed, then pause risky change when the budget is exhausted."] },
+      ]),
+    ],
+  },
+  security: {
+    topics: ["Threat Modeling", "Secrets Management", "Zero Trust"],
+    articles: [
+      a("secure-by-design", "Security by Design", "Build security controls into identity, data flows, deployment, and observability from the start.", 6, [
+        { heading: "Map the threats", body: ["Identify assets, trust boundaries, entry points, abuse cases, and the impact of compromised components."] },
+        { heading: "Protect access", body: ["Use least privilege, short-lived credentials, service identities, and centralized policy enforcement. Never treat a private network as authorization."] },
+        { heading: "Make incidents actionable", body: ["Centralize audit logs, detect unusual access, rotate secrets, and document containment and recovery steps."] },
+      ]),
+    ],
+  },
+  cloud: {
+    topics: ["Landing Zones", "Multi-Region", "Managed Services"],
+    articles: [
+      a("cloud-architecture-basics", "Cloud Architecture Essentials", "Choose cloud primitives by workload, failure domain, operational effort, and cost.", 6, [
+        { heading: "Separate responsibilities", body: ["Cloud providers operate the underlying service, but you still own configuration, identity, data protection, and application behavior."] },
+        { heading: "Design for regions and zones", body: ["Use zones for routine fault isolation and multiple regions when recovery objectives justify replication complexity."] },
+        { heading: "Prefer managed services carefully", body: ["Managed components reduce undifferentiated operations, but evaluate lock-in, limits, portability, and unit economics before committing."] },
+      ]),
+    ],
+  },
+  performance: {
+    topics: ["Tail Latency", "Profiling", "Query Optimization"],
+    articles: [
+      a("performance-engineering", "Performance Engineering", "Turn latency complaints into measurable budgets and targeted improvements.", 6, [
+        { heading: "Measure the tail", body: ["P95 and P99 latency reveal queueing and slow dependencies that averages hide. Track them by endpoint, tenant, and workload."] },
+        { heading: "Optimize the critical path", body: ["Remove unnecessary round trips, batch safe operations, cache stable reads, and move nonessential work off the request path."] },
+        { heading: "Verify under load", body: ["Use representative traffic, realistic data volume, warm and cold paths, and regression thresholds in CI or pre-production."] },
+      ]),
+    ],
+  },
+  cost: {
+    topics: ["Unit Economics", "FinOps", "Storage Lifecycle"],
+    articles: [
+      a("cost-aware-architecture", "Cost-Aware Architecture", "Control cloud spend by connecting resource choices to business units and workload behavior.", 5, [
+        { heading: "Track a unit cost", body: ["Measure cost per request, active user, transaction, or GB processed so architecture decisions can be compared against value."] },
+        { heading: "Remove waste first", body: ["Right-size idle resources, use schedules, set retention policies, and select storage tiers based on access patterns."] },
+        { heading: "Balance cost and resilience", body: ["Cheap infrastructure that causes downtime or slow recovery is not cheaper. Make reliability and performance trade-offs explicit."] },
+      ]),
+    ],
+  },
+  observability: {
+    topics: ["Distributed Tracing", "SLOs", "Alert Design"],
+    articles: [
+      a("observability-fundamentals", "Observability Fundamentals", "Build telemetry that explains user impact and helps teams act during incidents.", 5, [
+        { heading: "Use three signals", body: ["Metrics show trends, logs explain events, and traces connect a request across services. Correlation IDs make them useful together."] },
+        { heading: "Alert on symptoms", body: ["Alert on SLO burn, error rate, latency, and saturation rather than every low-level fluctuation."] },
+        { heading: "Keep telemetry safe", body: ["Redact secrets and personal data, control cardinality, and set retention based on investigation value and cost."] },
+      ]),
+    ],
+  },
+  interview: {
+    topics: ["Requirement Clarification", "Trade-off Narratives", "Design Communication"],
+    articles: [
+      a("system-design-interview-method", "A Repeatable Interview Method", "A clear sequence for moving from ambiguous requirements to a defensible architecture.", 6, [
+        { heading: "Clarify the problem", body: ["Confirm users, core actions, scale, latency, availability, consistency, and what is explicitly out of scope."] },
+        { heading: "Explain the shape", body: ["Start with a simple high-level design, then zoom into the riskiest flow and calculate the capacity that drives your choices."] },
+        { heading: "Close with trade-offs", body: ["Name alternatives, bottlenecks, failure modes, operational costs, and the next test you would run in a real system."] },
+      ]),
+    ],
+  },
+  databases: {
+    topics: ["Indexing", "Transactions", "Replication"],
+    articles: [
+      a("database-selection-guide", "Choosing a Database", "Match data shape, consistency, access patterns, and operational constraints to a storage model.", 6, [
+        { heading: "Start with access patterns", body: ["List reads, writes, query shapes, transaction boundaries, retention, and expected growth before choosing a database."] },
+        { heading: "Know the trade-offs", body: ["Relational systems provide mature transactions and constraints; key-value, document, and wide-column stores trade query flexibility for scale or access-pattern alignment."] },
+        { heading: "Plan operations", body: ["Include backups, migrations, replicas, failover, indexes, capacity limits, and recovery testing in the initial design."] },
+      ]),
+    ],
+  },
+  "distributed-systems": {
+    topics: ["Consensus", "Consistency Models", "Idempotency"],
+    articles: [
+      a("distributed-systems-reality", "The Reality of Distributed Systems", "Reason about partial failure, time, ordering, and consistency across machines.", 7, [
+        { heading: "Networks fail partially", body: ["A caller can time out while the server completes the request. Design request IDs, idempotency keys, and reconciliation paths."] },
+        { heading: "Choose consistency intentionally", body: ["Strong consistency simplifies correctness but can increase latency and coordination. Eventual consistency needs conflict and stale-read handling."] },
+        { heading: "Make time explicit", body: ["Do not assume clocks agree or messages arrive in order. Use versions, deadlines, sequence numbers, and causal metadata where needed."] },
+      ]),
+    ],
+  },
+  templates: {
+    topics: ["Reference Architectures", "Decision Records", "Production Checklists"],
+    articles: [
+      a("using-architecture-templates", "Using Architecture Templates", "Adapt a reference architecture to constraints instead of copying it blindly.", 5, [
+        { heading: "Begin with constraints", body: ["Record traffic, team skills, compliance, budget, latency, availability, and deployment requirements before selecting a template."] },
+        { heading: "Mark the boundaries", body: ["Separate template defaults from decisions that must change for your domain, data sensitivity, or failure model."] },
+        { heading: "Turn it into a plan", body: ["Add owners, risks, migrations, observability, security controls, and a validation checklist to make the template actionable."] },
+      ]),
+    ],
+  },
+  comparisons: {
+    topics: ["Decision Matrices", "Trade-off Analysis", "Migration Paths"],
+    articles: [
+      a("architecture-tradeoffs", "Making Architecture Trade-offs", "Compare options with explicit criteria rather than relying on popularity or intuition.", 5, [
+        { heading: "Define criteria", body: ["Score options against scale, reliability, latency, cost, team capability, security, and time to deliver."] },
+        { heading: "Compare failure modes", body: ["For every option, ask how it behaves during dependency loss, overload, bad deploys, data corruption, and regional failure."] },
+        { heading: "Document the decision", body: ["Capture context, rejected alternatives, assumptions, and the signal that would cause you to revisit the choice."] },
+      ]),
+    ],
+  },
+  capacity: {
+    topics: ["Peak Traffic", "Growth Forecasts", "Queue Capacity"],
+    articles: [
+      a("capacity-modeling", "Capacity Modeling", "Translate product growth and workload behavior into resources, limits, and headroom.", 6, [
+        { heading: "Model the workload", body: ["Estimate average and peak requests, payload size, concurrency, storage growth, and read/write ratios."] },
+        { heading: "Add headroom", body: ["Plan for bursts, failover capacity, deploys, and forecast error. A system at 100% utilization has no recovery room."] },
+        { heading: "Validate assumptions", body: ["Compare estimates with production telemetry and load tests. Update the model when traffic mix or feature behavior changes."] },
+      ]),
+    ],
+  },
+};
+
+export const KNOWLEDGE: KnowledgeCategory[] = KNOWLEDGE_BASE.map((category) => {
+  const expansion = KNOWLEDGE_EXPANSIONS[category.id];
+  return expansion
+    ? { ...category, topics: [...category.topics, ...expansion.topics], articles: [...category.articles, ...expansion.articles] }
+    : category;
+});
+
+export const ALL_ARTICLES: Article[] = KNOWLEDGE.flatMap((c) => c.articles);
+
+export const findArticle = (slug: string) => ALL_ARTICLES.find((art) => art.slug === slug);
 
 export const RECOMMENDED_LEARNING_ORDER = ["Architecture Basics", "Scalability", "Databases", "Caching", "Load Balancing", "Distributed Systems", "Reliability", "Performance", "Security", "Messaging/Event-Driven Systems", "Cloud", "Observability", "Cost Optimization", "Architecture Comparisons", "Interview Problems"];
