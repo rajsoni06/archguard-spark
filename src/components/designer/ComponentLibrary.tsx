@@ -34,8 +34,8 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
   return (
     <aside
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-300 ease-out",
-        collapsed ? "w-9" : "w-[248px]",
+        "designer-component-library relative flex shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-300 ease-out",
+        collapsed ? "w-9" : "w-[var(--designer-library-width)]",
       )}
     >
       <button
@@ -52,7 +52,7 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
 
       <div
         className={cn(
-          "flex h-full w-[248px] min-w-[248px] flex-col transition-opacity duration-200",
+          "flex h-full w-[var(--designer-library-width)] min-w-[var(--designer-library-width)] flex-col transition-opacity duration-200",
           collapsed ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
@@ -99,7 +99,7 @@ export function ComponentLibrary({ cloud, collapsed, onToggle, onAdd }: Props) {
                       );
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    className="group flex w-full cursor-grab items-center justify-between gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
+                    className="designer-library-boundary group flex w-full cursor-grab items-center justify-between gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground active:cursor-grabbing"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: b.color }} />
@@ -199,11 +199,11 @@ function ServiceCard({
         e.dataTransfer.effectAllowed = "move";
       }}
       className={cn(
-        "flex w-full cursor-grab items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-left text-xs transition-colors hover:border-primary/60 active:cursor-grabbing",
+        "designer-library-service-card flex w-full cursor-grab items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-left text-xs transition-colors hover:border-primary/60 active:cursor-grabbing",
       )}
     >
       <span
-        className="flex size-5 items-center justify-center rounded"
+        className="flex size-5 shrink-0 items-center justify-center rounded"
         style={{ backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)`, color }}
       >
         {svc.iconUrl ? (
@@ -212,7 +212,7 @@ function ServiceCard({
           <Icon className="size-3" />
         )}
       </span>
-      <span className="truncate">{svc.name}</span>
+      <span className="designer-service-name min-w-0 flex-1 whitespace-normal break-words leading-tight">{svc.name}</span>
     </button>
   );
 }

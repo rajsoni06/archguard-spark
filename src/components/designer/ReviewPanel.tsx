@@ -8,17 +8,20 @@ import {
   CircleCheck,
   GripVertical,
   LayoutDashboard,
-  PanelRightClose,
+  MessageCircle,
   PiggyBank,
+  Send,
   Sparkles,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ScoreRing } from "./ScoreRing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatUsd, type CostEstimate } from "@/lib/costEngine";
 import { explainAnalysis, getArchitectureRoadmap, type AnalysisResult, type ProjectContext } from "@/lib/ruleEngine";
+import { getDeterministicAiResponse, type AiReviewerMessage } from "@/lib/aiReviewer";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -52,11 +55,62 @@ export function ReviewPanel({
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const askAiScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<string>("analysis");
+  // Keep the architecture conversation visible in the AI tab so users can
+  // immediately see the chat and its latest answer without reopening it.
+  const [askAiOpen, setAskAiOpen] = useState(true);
+  const [askAiInput, setAskAiInput] = useState("");
+  const [askAiMessages, setAskAiMessages] = useState<AiReviewerMessage[]>([]);
+  const [askAiThinking, setAskAiThinking] = useState(false);
   const tabScroll = useRef<Record<string, number>>({});
   const [dragging, setDragging] = useState(false);
   const isEmpty = nodeCount === 0;
   const tabIndex = ["analysis", "score", "cost", "suggestions", "ai"].indexOf(activeTab);
+  const quickQuestions = [
+    "What's my score?",
+    "Biggest weaknesses",
+    "How can I improve?",
+    "Security issues",
+    "Scalability",
+    "Compliance",
+  ];
+
+  const submitPrompt = (value: string) => {
+    const prompt = value.trim();
+    if (!prompt) return;
+    const response = getDeterministicAiResponse(prompt, result ?? {
+      overall: 0,
+      maturity: "Beginner",
+      categories: [],
+      strengths: [],
+      issues: [],
+      evaluatedAt: new Date().toISOString(),
+      nodeCount: 0,
+      edgeCount: 0,
+      serviceNames: [],
+      connections: [],
+    }, ctx);
+    setAskAiMessages((current) => [...current, { role: "user", text: prompt }]);
+    setAskAiInput("");
+    setAskAiThinking(true);
+    window.setTimeout(() => {
+      setAskAiMessages((current) => [...current, { role: "assistant", text: response }]);
+      setAskAiThinking(false);
+    }, 700);
+  };
+
+  const submitAskAi = () => submitPrompt(askAiInput);
+
+  useEffect(() => {
+    if (!askAiOpen) return;
+    requestAnimationFrame(() => {
+      askAiScrollRef.current?.scrollTo({
+        top: askAiScrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }, [askAiMessages, askAiThinking, askAiOpen]);
 
   const startResize = useCallback(() => setDragging(true), []);
 
@@ -83,9 +137,13 @@ export function ReviewPanel({
     <aside
       ref={asideRef}
       aria-hidden={!open}
-      style={{ width: open ? (collapsed ? 36 : width) : 0 }}
+      style={{
+        width: open ? (collapsed ? 36 : width) : 0,
+        "--review-panel-width": `${width}px`,
+      } as CSSProperties}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-surface",
+        "designer-review-panel relative flex shrink-0 flex-col border-l border-border bg-surface",
+        open ? "overflow-hidden" : "overflow-visible",
         dragging ? "transition-none" : "transition-[width] duration-300 ease-in-out",
         "motion-reduce:transition-none",
       )}
@@ -107,8 +165,9 @@ export function ReviewPanel({
         onClick={onToggle}
         aria-label="Expand review panel"
         className={cn(
-          "absolute inset-0 z-10 flex flex-col items-center gap-3 bg-surface py-3 text-muted-foreground transition-opacity duration-200 hover:text-foreground",
-          collapsed ? "opacity-100" : "pointer-events-none opacity-0",
+          "absolute z-10 flex flex-col items-center gap-3 bg-transparent py-3 text-muted-foreground transition-opacity duration-200 hover:bg-accent/60 hover:text-foreground",
+          !open || collapsed ? "opacity-100" : "pointer-events-none opacity-0",
+          !open ? "inset-y-0 right-0 w-9" : "inset-0",
         )}
       >
         <ChevronRight className="size-4 rotate-180" />
@@ -116,22 +175,23 @@ export function ReviewPanel({
       </button>
 
       <div
-        style={{ width: collapsed ? 290 : width, minWidth: collapsed ? 290 : width }}
+        style={{ width: collapsed ? 290 : "100%", minWidth: 0 }}
         className={cn(
-          "flex h-full flex-col overflow-hidden transition-[transform,opacity] duration-300 ease-out",
+          "flex h-full min-w-0 flex-col overflow-hidden transition-[transform,opacity] duration-300 ease-out",
           open && !collapsed ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-3 opacity-0",
           "motion-reduce:transform-none motion-reduce:transition-none",
         )}
       >
-        <div className="flex items-center justify-between border-b border-border pl-3 pr-3 py-2.5">
-          <span className="text-sm font-semibold">Architecture Review</span>
+        <div className="review-panel-header flex items-center border-b border-border px-3 py-2.5">
           <button
             onClick={onToggle}
-            aria-label="Collapse review panel"
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Close Architecture Review panel"
+            title="Close Architecture Review panel"
+            className="mr-1 rounded-md border border-transparent p-1 text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
           >
-            <PanelRightClose className="size-4" />
+            <ChevronRight className="size-4" />
           </button>
+          <span className="text-sm font-semibold">Architecture Review</span>
         </div>
 
         {!result ? (
@@ -166,7 +226,7 @@ export function ReviewPanel({
             }}
             className="flex min-h-0 flex-1 flex-col gap-0"
           >
-            <TabsList className="relative m-2.5 grid grid-cols-5">
+            <TabsList className="review-panel-tabs relative m-2.5 grid grid-cols-5">
               <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 rounded-md bg-background shadow transition-[left,width] duration-200 ease-out motion-reduce:transition-none" style={{ left: `calc(${Math.max(tabIndex, 0) * 20}% + 0.25rem)`, width: "calc(20% - 0.5rem)" }} />
               <TabsTrigger value="analysis" className="relative z-10 text-[11px] data-[state=active]:bg-transparent data-[state=active]:shadow-none">
                 Analysis
@@ -185,7 +245,7 @@ export function ReviewPanel({
               </TabsTrigger>
             </TabsList>
 
-            <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            <div ref={scrollContainerRef} className="review-panel-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
               <TabsContent value="analysis" className="tab-panel-content mt-0 space-y-4">
                 {isEmpty ? (
                   <EmptyArchitecture onFocusLibrary={onFocusLibrary} />
@@ -195,7 +255,7 @@ export function ReviewPanel({
                       {result.strengths.map((r) => (
                         <li
                           key={r.rule.id}
-                          className="flex gap-2 text-[13px] leading-relaxed text-foreground/80"
+                          className="review-strength-item flex gap-2 text-[13px] leading-relaxed text-foreground/80"
                         >
                           <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
                           <span>{r.rule.strength}</span>
@@ -333,14 +393,164 @@ export function ReviewPanel({
               </TabsContent>
 
               <TabsContent value="ai" className="tab-panel-content mt-0 space-y-3">
-                <div className="rounded-lg border border-border bg-card p-3">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
-                    <Bot className="size-3.5" /> AI explanation
+                <div className="overflow-hidden rounded-xl border border-slate-300/80 bg-background shadow-sm dark:border-white/15">
+                  <div className="flex items-start justify-between gap-2 border-b border-indigo-200/80 bg-indigo-100/70 px-3 py-2 dark:border-indigo-900/60 dark:bg-indigo-950/35">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <img src="/Ask_AI_logo.png" alt="" className="size-9 shrink-0 rounded-lg object-contain" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold tracking-tight">AI Architecture Reviewer</div>
+                        <div className="text-[10px] text-muted-foreground">Architecture-aware assistant</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAskAiOpen((open) => !open)}
+                      aria-label={askAiOpen ? "Close Ask AI" : "Open Ask AI"}
+                      title={askAiOpen ? "Close Ask AI" : "Ask about this architecture"}
+                      className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+                    >
+                      {askAiOpen ? <X className="size-3.5" /> : <MessageCircle className="size-3.5" />}
+                    </button>
                   </div>
-                  <div className="mt-2 space-y-3 text-[13px] leading-relaxed text-foreground/80">
-                    {explainAnalysis(result, ctx).split("\n\n").map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+
+                  <div className="space-y-3 p-3">
+                    <section className="ai-summary-card rounded-xl border border-primary/15 bg-gradient-to-br from-primary/8 via-background/70 to-sky-500/5 p-3">
+                      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-primary">
+                        <Bot className="size-3.5" /> AI review
+                      </div>
+                      <p className="ai-summary-description text-[13.2px] leading-relaxed text-foreground/75">
+                        I reviewed your <span className="font-semibold text-foreground">{ctx.cloud.toUpperCase()}</span>{" "}
+                        <span className="font-semibold text-foreground">{ctx.pattern.toLowerCase()}</span> architecture for a{" "}
+                        <span className="font-semibold text-foreground">{ctx.industry.toLowerCase()}</span> workload targeting{" "}
+                        <span className="font-semibold text-primary">{ctx.scale}</span>.
+                      </p>
+                    </section>
+
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                      {[
+                        ["Services", result.nodeCount],
+                        ["Relations", result.edgeCount],
+                        ["Traffic", ctx.traffic],
+                        ["Availability", ctx.availability],
+                        ["Latency", ctx.latency],
+                        ["Consistency", ctx.consistency],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-border/80 bg-background/65 px-2 py-1.5">
+                          <div className="ai-summary-label text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+                          <div className="ai-summary-value mt-0.5 truncate text-[13px] font-semibold text-foreground">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <section className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-center">
+                      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Architecture score</div>
+                      <div className="mt-0.5 text-2xl font-semibold tabular-nums text-primary">{result.overall} <span className="text-xs font-medium text-muted-foreground">/ 100</span></div>
+                      <div className="text-[10px] text-muted-foreground">{result.maturity}</div>
+                    </section>
+
+                    {result.issues[0] ? (
+                      <section>
+                        <div className="mb-1 text-[11px] font-semibold text-foreground">⚠ Main weakness</div>
+                        <div className="rounded-lg border border-warning/25 bg-warning/5 p-2 text-[11px] leading-relaxed text-foreground/75">
+                          <span className="font-medium text-foreground">{result.issues[0].rule.category} · {result.issues[0].rule.severity}</span><br />
+                          {result.issues[0].rule.issue}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {result.issues[0] ? (
+                      <section>
+                        <div className="mb-1 text-[11px] font-semibold text-foreground">💡 Highest-impact recommendation</div>
+                        <div className="rounded-lg border border-primary/20 bg-sky-50/70 p-2 text-[11px] leading-relaxed text-foreground/75 dark:bg-sky-950/20">
+                          {result.issues[0].rule.recommendation}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    <section>
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Try asking</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {quickQuestions.map((question) => (
+                          <button
+                            key={question}
+                            type="button"
+                            onClick={() => {
+                              setAskAiOpen(true);
+                              submitPrompt(question);
+                            }}
+                            className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] text-foreground/75 transition-colors hover:border-primary/40 hover:bg-primary/10"
+                          >
+                            {question}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   </div>
                 </div>
+                {askAiOpen ? (
+                  <div className="rounded-xl border border-sky-200/80 bg-sky-50/45 p-2.5 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                        <MessageCircle className="size-3.5" /> Ask about this architecture
+                      </div>
+                      <span className="rounded-full border border-primary/15 bg-background/70 px-2 py-0.5 text-[9px] text-muted-foreground">AI reviewer</span>
+                    </div>
+                    <div ref={askAiScrollRef} className="max-h-80 space-y-2.5 overflow-y-auto px-0.5 py-0.5">
+                      {askAiMessages.length === 0 ? (
+                        <>
+                          <div className="ml-auto w-fit max-w-[85%] break-words rounded-2xl rounded-tr-md bg-sky-200 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:bg-sky-900/60 dark:text-sky-50">
+                            Hi
+                          </div>
+                          <div className="mr-5 w-fit max-w-[90%] break-words rounded-2xl rounded-tl-md border border-border/70 bg-background/90 px-3 py-2 text-[11px] leading-relaxed text-foreground/80 shadow-sm">
+                            <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">AI reviewer</div>
+                            Hey! I’m ready to help analyze your architecture. Ask me about the score, weaknesses, security, scalability, or improvements.
+                          </div>
+                        </>
+                      ) : null}
+                      {askAiMessages.map((message, index) => (
+                        <div
+                          key={`${message.role}-${index}`}
+                          className={cn(
+                            "w-fit max-w-[90%] break-words rounded-2xl px-3 py-2 text-[11px] leading-relaxed whitespace-pre-line shadow-sm",
+                            message.role === "user"
+                              ? "ml-auto rounded-tr-md bg-sky-200 text-sky-950 dark:bg-sky-900/60 dark:text-sky-50"
+                              : "mr-auto rounded-tl-md border border-border/70 bg-background/90 text-foreground/80",
+                          )}
+                        >
+                          {message.role === "assistant" ? (
+                            <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide opacity-70">AI reviewer</div>
+                          ) : null}
+                          {message.text}
+                        </div>
+                      ))}
+                      {askAiThinking ? (
+                        <div className="mr-auto flex w-fit items-center gap-1 rounded-2xl rounded-tl-md border border-border/70 bg-background/90 px-3 py-2 text-[11px] text-muted-foreground shadow-sm" aria-label="AI reviewer is typing">
+                          <span className="size-1 animate-bounce rounded-full bg-primary/55 [animation-delay:-0.2s]" />
+                          <span className="size-1 animate-bounce rounded-full bg-primary/55 [animation-delay:-0.1s]" />
+                          <span className="size-1 animate-bounce rounded-full bg-primary/55" />
+                        </div>
+                      ) : null}
+                    </div>
+                    <form
+                      className="mt-2.5 flex items-center gap-1.5 rounded-full border border-border/80 bg-background/85 p-1 pl-3 shadow-sm"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        submitAskAi();
+                      }}
+                    >
+                      <input
+                        value={askAiInput}
+                        onChange={(event) => setAskAiInput(event.target.value)}
+                        placeholder="Ask about your architecture..."
+                        aria-label="Ask AI about your architecture"
+                        className="min-w-0 flex-1 bg-transparent py-1 text-[11px] text-foreground outline-none placeholder:text-muted-foreground"
+                      />
+                      <Button type="submit" size="sm" className="size-7 shrink-0 rounded-full p-0" aria-label="Send message" title="Send message" disabled={!askAiInput.trim()}>
+                        <Send className="size-3.5" />
+                      </Button>
+                    </form>
+                  </div>
+                ) : null}
                 <div className="rounded-lg border border-border bg-card p-3">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
                     <Sparkles className="size-3.5" /> Architecture roadmap
@@ -366,7 +576,7 @@ export function ReviewPanel({
               </TabsContent>
             </div>
 
-            <div className="border-t border-border p-2.5">
+            <div className="review-panel-footer border-t border-border p-2.5">
               <Button size="sm" className="w-full" onClick={onRun}>
                 Re-run review
               </Button>
@@ -538,7 +748,10 @@ function EmptyArchitecture({ onFocusLibrary }: { onFocusLibrary: () => void }) {
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
+      <div className={cn(
+        "review-group-title mb-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/70",
+        title.startsWith("Detected strengths") && "review-strengths-title",
+      )}>
         {title}
       </div>
       <ul className="space-y-2">{children}</ul>

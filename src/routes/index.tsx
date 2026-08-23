@@ -221,7 +221,9 @@ function Landing() {
             </dl>
           </div>
 
-          <Reveal><FlowVisual /></Reveal>
+          <div className="home-reveal is-visible">
+            <FlowVisual />
+          </div>
         </section>
 
         <section className="mx-auto max-w-6xl px-5 pb-20">

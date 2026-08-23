@@ -38,8 +38,8 @@ export function ScoreRing({
   }, [value]);
 
   return (
-    <div className="relative" aria-label={`Architecture score ${displayValue} out of 100`} style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+    <div className="review-score-ring relative" aria-label={`Architecture score ${displayValue} out of 100`} style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="size-full -rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
         <circle
           cx={size / 2}
@@ -55,10 +55,10 @@ export function ScoreRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-semibold tracking-tight" style={{ color }}>
+        <span className="review-score-ring-value text-3xl font-semibold tracking-tight" style={{ color }}>
           {displayValue}
         </span>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="review-score-ring-label text-[10px] uppercase tracking-wider text-muted-foreground">
           {label ?? "/ 100"}
         </span>
       </div>

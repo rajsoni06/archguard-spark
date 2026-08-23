@@ -59,6 +59,7 @@ import { loadGraph, saveGraph, shouldSaveGraphOnUnmount } from "@/lib/session";
 import { BoundaryNode, DELETE_NODE_EVENT, ServiceNode, TextNode, type CanvasProblem } from "./nodes";
 import { ComponentLibrary, type LibraryPayload } from "./ComponentLibrary";
 import { ReviewPanel } from "./ReviewPanel";
+import { FloatingAiReviewer } from "./FloatingAiReviewer";
 import { FailureSimulator } from "./FailureSimulator";
 import { TradeoffCard } from "./TradeoffCard";
 import { Badge } from "@/components/ui/badge";
@@ -1588,23 +1589,23 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-nowrap items-center justify-between gap-2 border-b border-border bg-surface/70 px-4 py-2.5">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold tracking-tight">{ctx.name}</h1>
+      <header className="designer-header flex flex-nowrap items-center justify-between gap-2 border-b border-border bg-surface/70 px-4 py-2.5">
+        <div className="designer-project-meta min-w-0 flex-1">
+          <h1 className="designer-project-title whitespace-nowrap text-sm font-semibold tracking-tight">{ctx.name}</h1>
           <div className="mt-0.5 flex items-center gap-1.5">
-            <Badge variant="outline" className="h-5 border-primary/30 text-[10px] text-primary">
+            <Badge variant="outline" className="designer-project-badge min-w-0 max-w-full whitespace-nowrap h-5 border-primary/30 text-[10px] text-primary">
               {ctx.cloud.toUpperCase()} • {ctx.pattern} • {ctx.scale} • {ctx.industry}
             </Badge>
             <button
               onClick={onEditContext}
               aria-label="Edit project setup"
-              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="designer-project-settings rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <Settings2 className="size-3.5" />
             </button>
           </div>
         </div>
-        <div className="ml-auto mr-2 flex shrink-0 items-center gap-1 rounded-md bg-transparent text-foreground">
+        <div className="designer-view-actions ml-auto mr-2 flex shrink-0 items-center gap-1 rounded-md bg-transparent text-foreground">
           <Button variant="ghost" size="icon" className="size-8" onClick={() => zoomOut()} title="Zoom out">
             <ZoomOut className="size-4" />
           </Button>
@@ -1632,7 +1633,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             aria-pressed={canvasTheme === "dark"}
           >
             {canvasTheme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
-            <span className="hidden sm:inline">{canvasTheme === "dark" ? "Light" : "Dark"} Mode</span>
+            <span className="designer-theme-label hidden sm:inline">{canvasTheme === "dark" ? "Light" : "Dark"} Mode</span>
           </Button>
           <Button
             variant="ghost"
@@ -1646,35 +1647,35 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             {isLocked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
           </Button>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-          <Button variant="ghost" size="sm" onClick={handleSave} title="Save image">
-            <Save className="size-4" /> Save
+        <div className="designer-export-actions flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+          <Button variant="ghost" size="sm" className="designer-icon-action" onClick={handleSave} title="Save image">
+            <Save className="size-4" /><span className="designer-action-label">Save</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleShare} title="Share image">
-            <Share2 className="size-4" /> Share
+          <Button variant="ghost" size="sm" className="designer-icon-action" onClick={handleShare} title="Share image">
+            <Share2 className="size-4" /><span className="designer-action-label">Share</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleExport} title="Export image (PNG/JPG)">
-            <Download className="size-4" /> Export
+          <Button variant="ghost" size="sm" className="designer-icon-action" onClick={handleExport} title="Export image (PNG/JPG)">
+            <Download className="size-4" /><span className="designer-action-label">Export</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={onNewProject} disabled={isLocked}>
-            <FilePlus2 className="size-4" /> New
+          <Button variant="ghost" size="sm" className="designer-icon-action" onClick={onNewProject} disabled={isLocked}>
+            <FilePlus2 className="size-4" /><span className="designer-action-label">New</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setFailureOpen(true)}
-            className="border-destructive/40 text-destructive hover:bg-destructive/8"
+            className="designer-icon-action designer-failure-action border-destructive/40 text-destructive hover:bg-destructive/8"
             title="Simulate a component failure and assess impact"
           >
-            <ZapOff className="size-4" /> Simulate Failure
+            <ZapOff className="size-4" /><span className="designer-action-label">Simulate Failure</span>
           </Button>
-          <Button size="sm" onClick={() => (isReviewPanelOpen ? setIsReviewPanelOpen(false) : runReview())}>
-            <Sparkles className="size-4" /> Review Architecture
+          <Button size="sm" className="designer-icon-action designer-review-action" onClick={() => (isReviewPanelOpen ? setIsReviewPanelOpen(false) : runReview())}>
+            <Sparkles className="size-4" /><span className="designer-action-label">Review Architecture</span>
           </Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ComponentLibrary
             cloud={ctx.cloud}
           collapsed={libCollapsed}
@@ -1690,7 +1691,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             backgroundImage: canvasPalette.overlay,
           }}
         >
-          <div className="absolute left-1/2 top-3 z-10 flex w-max max-w-[calc(100%-1rem)] -translate-x-1/2 flex-nowrap items-center justify-start gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur sm:gap-1 sm:p-1.5">
+          <div className="designer-canvas-toolbar absolute left-1/2 top-3 z-10 flex w-max max-w-[calc(100%-1rem)] -translate-x-1/2 flex-nowrap items-center justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-lg border border-border bg-surface/95 p-1 panel-shadow backdrop-blur sm:gap-1 sm:p-1.5">
             <ToolButton active={tool === "select"} onClick={() => setTool("select")} label="Select">
               <MousePointer2 className="size-4" />
             </ToolButton>
@@ -1857,6 +1858,8 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
             }
             return null;
           })()}
+
+          <FloatingAiReviewer result={result} ctx={ctx} />
         </div>
 
         <ReviewPanel
@@ -1869,7 +1872,7 @@ function Inner({ ctx, onEditContext, onNewProject }: WorkspaceProps) {
           onResize={(w) => setReviewWidth(Math.min(MAX_REVIEW_W, Math.max(MIN_REVIEW_W, w)))}
           nodeCount={nodes.filter((n) => n.type === "service").length}
           onFocusLibrary={() => setLibCollapsed(false)}
-          onToggle={() => setIsReviewPanelOpen(false)}
+          onToggle={() => setIsReviewPanelOpen((open) => !open)}
           onRun={runReview}
           onScoreTabClick={runReview}
         />
@@ -1899,7 +1902,7 @@ const ToolButton = React.forwardRef<
       title={label}
       aria-label={label}
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/90 transition-colors hover:bg-accent hover:text-foreground",
+        "designer-toolbar-button flex size-7 shrink-0 items-center justify-center rounded-md text-foreground/90 transition-colors hover:bg-accent hover:text-foreground",
         active && "bg-primary/15 text-primary",
         className
       )}

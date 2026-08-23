@@ -144,8 +144,18 @@ export function ServiceNode({ id, data, selected }: NodeProps) {
           {Icon ? <Icon className="size-4" /> : null}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium leading-tight">{d.label}</div>
-          <div className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+          <div
+            className="truncate whitespace-nowrap text-[13px] font-medium leading-tight"
+            title={d.label}
+            aria-label={d.label}
+          >
+            {d.label}
+          </div>
+          <div
+            className="truncate whitespace-nowrap text-[10px] uppercase tracking-wide text-muted-foreground"
+            title={svc?.category ?? "Component"}
+            aria-label={svc?.category ?? "Component"}
+          >
             {svc?.category ?? "Component"}
           </div>
         </div>
